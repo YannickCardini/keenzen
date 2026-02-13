@@ -1,6 +1,7 @@
 # Angular/Ionic - Build output
 /dist/
 /app/dist/
+/app/www/                <-- AJOUTÉ
 /out-tsc/
 /tmp/
 /coverage/
@@ -14,8 +15,10 @@
 # Node modules
 /node_modules/
 /app/node_modules/
+/app/android/app/build/  <-- AJOUTÉ (Le dossier de build Android)
+/app/android/.gradle/    <-- AJOUTÉ (Cache Gradle)
 
-# Dependency lock files (optional - décommentez si vous utilisez npm)
+# Dependency lock files
 # package-lock.json
 # yarn.lock
 
@@ -48,4 +51,3 @@ docker-compose.override.yml
 # Kubernetes
 /k8s/*.pem
 /k8s/*.key
-

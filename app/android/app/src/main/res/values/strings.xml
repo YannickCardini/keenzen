@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Keezen</string>
+    <string name="title_activity_main">Keezen</string>
+    <string name="package_name">app.android.keenzen</string>
+    <string name="custom_url_scheme">app.android.keenzen</string>
+</resources>

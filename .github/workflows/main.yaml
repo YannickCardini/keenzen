@@ -3,6 +3,15 @@ name: Build and Deploy
 on:
   push:
     branches: [ main ]
+  # --- Permet de lancer le build Android manuellement ---
+  workflow_dispatch:
+    inputs:
+      build_android:
+        description: 'Build Android App Bundle (.aab) ?'
+        required: true
+        type: boolean
+        default: false
+  # ------------------------------------------------------
 
 jobs:
   build-and-push:
@@ -27,3 +36,40 @@ jobs:
     - name: Deploy to AKS
       run: |
         kubectl set image deployment/keezen-deployment keezen-game=basicregistrecontainer.azurecr.io/keezen:latest
+
+  build-android:
+    # --- Ne se lance que si on coche la case manuellement ---
+    if: ${{ github.event.inputs.build_android == 'true' || github.event_name == 'push' && false }}
+    # -------------------------------------------------------
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Dependencies
+        run: |
+          cd app
+          npm install
+
+      - name: Build Android App Bundle
+        run: |
+          cd app
+          npx cap sync android
+          cd android
+          ./gradlew bundleRelease
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-release-aab
+          path: app/android/app/build/outputs/bundle/release/app-release.aab
