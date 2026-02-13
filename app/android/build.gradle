@@ -1,4 +1,16 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
+ext {
+    compileSdkVersion = 34
+    minSdkVersion = 22
+    targetSdkVersion = 34
+    // Assure-toi d'ajouter les variables manquantes pour les dépendances ici
+    androidxAppCompatVersion = "1.6.1"
+    androidxCoordinatorLayoutVersion = "1.2.0"
+    coreSplashScreenVersion = "1.0.1"
+    junitVersion = "4.13.2"
+    androidxJunitVersion = "1.1.5"
+    androidxEspressoCoreVersion = "3.5.1"
+}
 
 buildscript {
     
@@ -15,7 +27,6 @@ buildscript {
     }
 }
 
-apply from: "variables.gradle"
 
 allprojects {
     repositories {
@@ -27,3 +38,4 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
