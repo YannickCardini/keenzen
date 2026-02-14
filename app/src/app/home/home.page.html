@@ -18,7 +18,11 @@
     <div class="grid-row">
       @for (col of cols; track col) {
       <div class="grid-col">
+        @if(shouldDisplayThisSquare(row, col)){
         <div class="case">{{ getSquareIndex(row, col) }}</div>
+        }@else{
+        <div class="case-hidden"></div>
+        }
       </div>
       }
     </div>

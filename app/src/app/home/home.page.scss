@@ -39,8 +39,22 @@
     align-items: center;
     font-size: calc(var(--square-size) * 0.15);
     box-sizing: border-box;
-    border-radius: 100%;
     line-height: 1;
+}
+
+.case-hidden {
+    width: var(--square-size);
+    height: var(--square-size);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-sizing: border-box;
+    line-height: 1;
+}
+
+.case:hover {
+    background-color: green;
+    cursor: pointer;
 }
 
 // Empêcher le scroll horizontal sur mobile
