@@ -1,7 +1,9 @@
 name: Build Android App Bundle 🤖
 
+# --- Lance le build Android manuellement ---
 on:
   workflow_dispatch:
+# -------------------------------------------
 
 jobs:
   build-android:
@@ -19,17 +21,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 35
-          build-tools-version: 35.0.0
-
-      - name: Install Android SDK Platform 35
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35"
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "build-tools;35.0.0"
 
       - name: Install Dependencies
         run: |
