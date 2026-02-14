@@ -7,7 +7,7 @@ import { getSquareToDisplay } from './square-data';
   styleUrl: 'board.component.scss',
 })
 export class BoardComponent implements OnInit {
-  gridSize = 13;
+  gridSize = 15;
   squareSize: number = 0;
   squareToDisplay: number[] = [];
 
