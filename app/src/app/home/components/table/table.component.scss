@@ -13,57 +13,60 @@
     padding: 1rem;
 }
 
-.content-wrapper {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+
+.hand-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 0.5rem;
+    height: 120px;
     width: 100%;
-    max-width: 1200px;
-    height: 100%;
-
-    @media (max-width: 768px) {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-    }
 }
 
-.card-selector-section {
-    display: flex;
-    flex-direction: column;
-    background-color: white;
-    border-radius: 0.75rem;
-    padding: 1rem;
+/* THE CARD DESIGN */
+.tock-card {
+    position: relative;
+    width: 3.5rem;
+    /* 14 * 0.25rem = w-14 */
+    height: 5rem;
+    /* 20 * 0.25rem = h-20 */
+    background: white;
+    border-radius: 0.5rem;
+    border: 1px solid #d6d3d1;
+    /* stone-300 */
     box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-    overflow-y: auto;
-}
-
-.game-info-section {
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-
-    app-game-info {
-        display: block;
-        height: 100%;
-    }
-}
-
-.action-footer {
-    margin-top: auto;
-    padding-bottom: 1rem;
-}
-
-.action-btn {
-    background: #d6d3d1;
-    padding: 0.5rem 1.5rem;
-    border-radius: 9999px;
-    font-weight: 600;
-    color: #444;
-    border: none;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.25rem;
+    transition: all 0.2s ease;
     cursor: pointer;
-    transition: background 0.2s;
+    outline: none;
+    padding: 0;
 
     &:hover {
-        background: #a8a29e;
+        transform: translateY(-0.5rem);
+        /* hover:-translate-y-2 */
+        z-index: 10;
+    }
+
+    &.selected {
+        transform: translateY(-1rem);
+        /* -translate-y-4 */
+        box-shadow: 0 0 0 4px #c084fc;
+        /* ring-4 ring-purple-400 */
+        z-index: 20;
+    }
+
+    &.is-red {
+        color: #ef4444;
+        /* red-500 */
+    }
+
+    &:not(.is-red) {
+        color: #1e293b;
+        /* slate-800 */
     }
 }

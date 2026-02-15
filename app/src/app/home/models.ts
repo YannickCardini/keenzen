@@ -4,20 +4,20 @@ interface Card {
   value: string;
 }
 
+interface Player {
+  isConnected: boolean;
+  name: string;
+  color: string;
+  marblePositions: number[];
+}
+
 type PlayerColor = 'red' | 'green' | 'blue' | 'orange';
 
 export interface GameState {
-  redPlayerIsConnected: boolean;
-  greenPlayerIsConnected: boolean;
-  bluePlayerIsConnected: boolean;
-  orangePlayerIsConnected: boolean;
+  players: Player[];
   isConnected: boolean;
   currentTurn: PlayerColor;
   hand: Card[];
-  redPlayerMarblePosition: number[];
-  greenPlayerMarblePosition: number[];
-  bluePlayerMarblePosition: number[];
-  orangePlayerMarblePosition: number[];
   discardedCards: Card[];
 
 }

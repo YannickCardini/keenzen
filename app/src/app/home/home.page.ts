@@ -1,10 +1,10 @@
 import { Component, signal } from '@angular/core';
 import { IonHeader, IonToolbar, IonTitle, IonContent } from '@ionic/angular/standalone';
-import { BoardComponent } from './components/board/plateau.component';
+import { BoardComponent } from './components/board/board.component';
 import { TableComponent } from './components/table/table.component';
 import { TestComponent } from './components/test.component';
 import { GameStateService } from './services/game-state.service';
-import { GameState } from '../models/game-state.model';
+import { GameState } from './models';
 
 @Component({
   selector: 'app-home',
@@ -14,18 +14,18 @@ import { GameState } from '../models/game-state.model';
 })
 export class HomePage {
 
-    constructor(public gameStateService: GameStateService) { }
+  constructor(public gameStateService: GameStateService) { }
 
-    ngOnInit() {
-        this.connect();
-    }
+  ngOnInit() {
+    this.connect();
+  }
 
-    connect() {
-        this.gameStateService.connect('ws://localhost:8080');
-    }
+  connect() {
+    this.gameStateService.connect('ws://localhost:8080');
+  }
 
-    disconnect() {
-        this.gameStateService.disconnect()
-    }
+  disconnect() {
+    this.gameStateService.disconnect()
+  }
 }
 

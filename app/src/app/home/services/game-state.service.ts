@@ -1,5 +1,5 @@
-import { Injectable, signal } from '@angular/core';
-import { GameData } from 'src/app/models/game-state.model';
+import { Injectable, signal, computed } from '@angular/core';
+import { GameData } from 'src/app/home/models';
 
 @Injectable({
   providedIn: 'root',
@@ -8,6 +8,9 @@ export class GameStateService {
   message = signal('En attente...');
   data = signal<GameData | null>(null);
   isConnected = signal(false);
+
+  // Computed signal that automatically updates when data changes
+  hand = computed(() => this.data()?.gameState?.hand ?? []);
 
   private ws: WebSocket | null = null;
 

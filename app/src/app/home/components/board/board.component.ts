@@ -15,7 +15,6 @@ export class BoardComponent implements OnInit {
   constructor(private gameStateService: GameStateService) { }
 
   ngOnInit() {
-    console.log(this.gameStateService.data());
     this.calculateSquareSize();
     this.loadSquareData();
   }
@@ -60,12 +59,10 @@ export class BoardComponent implements OnInit {
     const gameData = this.gameStateService.data();
     if (!gameData || !this.gameStateService.isConnected()) return '';
 
-    const playerPositions = [
-      { position: gameData.gameState.redPlayerMarblePosition, color: '#ef4444' },
-      { position: gameData.gameState.greenPlayerMarblePosition, color: '#22c55e' },
-      { position: gameData.gameState.bluePlayerMarblePosition, color: '#3b82f6' },
-      { position: gameData.gameState.orangePlayerMarblePosition, color: '#f97316' }
-    ];
+    const playerPositions = gameData.gameState.players.map(player => ({
+      color: player.color,
+      position: player.marblePositions
+    }))
 
     const squareIndex = this.getSquareIndex(row, col);
     const player = playerPositions.find(p => (p.position || []).includes(squareIndex));

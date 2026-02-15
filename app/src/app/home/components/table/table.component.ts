@@ -1,6 +1,5 @@
+import { GameStateService } from './../../services/game-state.service';
 import { Component, ChangeDetectionStrategy, signal } from '@angular/core';
-import { CardSelectorComponent } from '../card-selector/card-selector.component';
-import { GameInfoComponent } from '../game-info/game-info.component';
 
 interface Card {
   id: string;
@@ -14,17 +13,17 @@ interface Card {
   styleUrl: 'table.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
-  imports: [CardSelectorComponent, GameInfoComponent]
+  imports: []
 })
 export class TableComponent {
-  // State using Angular Signals
-  hand = signal<Card[]>([
-    { id: '1', suit: '♥', value: 'A' },
-    { id: '2', suit: '♠', value: 'J' },
-    { id: '3', suit: '♦', value: '4' },
-    { id: '4', suit: '♣', value: 'K' },
-    { id: '5', suit: '♥', value: '7' },
-  ]);
+
+  constructor(private gameStateService: GameStateService) { }
+
+  // Expose the hand from GameStateService for template iteration
+  // This uses the computed signal which automatically updates when data changes
+  get hand(): Card[] {
+    return this.gameStateService.hand();
+  }
 
   selectedCardIndex = signal<number | null>(null);
   turnPhase = signal<string>('Select a card');
@@ -41,14 +40,13 @@ export class TableComponent {
     }
   }
 
-  onDrawCards() {
-    // Mock drawing cards
-    this.hand.set([
-      { id: '6', suit: '♦', value: 'Q' },
-      { id: '7', suit: '♣', value: '10' },
-      { id: '8', suit: '♠', value: '3' },
-      { id: '9', suit: '♥', value: 'A' },
-    ]);
-    this.selectedCardIndex.set(null);
+  selectCard(index: number) {
+    this.onCardSelected(index);
+  }
+
+  getPlayerHand(): Card[] {
+    const gameData = this.gameStateService.data();
+    if (!gameData) return [];
+    return gameData.gameState.hand;
   }
 }
