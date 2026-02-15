@@ -22,12 +22,10 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      # --- AJOUTEZ CETTE ÉTAPE POUR METTRE À JOUR LE SDK ---
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          sdk-version: '35'
-      # -----------------------------------------------------
+          sdk-version: '36'  # ⬅️ Changez de 35 à 36
 
       - name: Install Dependencies
         run: |

@@ -1,9 +1,7 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
 ext {
-    compileSdkVersion = 34
+    compileSdkVersion = 36  // ⬅️ Changez de 34 à 36
     minSdkVersion = 22
-    targetSdkVersion = 34
-    // Assure-toi d'ajouter les variables manquantes pour les dépendances ici
+    targetSdkVersion = 36   // ⬅️ Changez de 34 à 36
     androidxAppCompatVersion = "1.6.1"
     androidxCoordinatorLayoutVersion = "1.2.0"
     coreSplashScreenVersion = "1.0.1"
