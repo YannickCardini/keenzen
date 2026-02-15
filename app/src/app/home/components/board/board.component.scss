@@ -1,9 +1,10 @@
+@use "sass:color";
 /* --- Variables et Couleurs --- */
 $colors: (
-    red: #ef4444,
-    green: #22c55e,
-    blue: #3b82f6,
-    orange: #f97316
+    "red": #ef4444,
+    "green": #22c55e,
+    "blue": #3b82f6,
+    "orange": #f97316
 );
 
 .board-container {
@@ -95,7 +96,7 @@ $colors: (
         &.home-#{$name},
         &.arrival-#{$name} {
             background-color: rgba($hex, 0.85); // Couleur vive et légèrement opaque
-            border: 2px solid darken($hex, 10%); // Bordure un poil plus sombre
+            border: 2px solid color.adjust($hex, $lightness: -10%); // Bordure un poil plus sombre
             box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.15); // Effet bouton
         }
     }
@@ -126,7 +127,7 @@ $colors: (
 
     @each $name, $hex in $colors {
         &.marble-#{$name} {
-            background: radial-gradient(circle at 35% 35%, lighten($hex, 20%), $hex 60%, darken($hex, 20%));
+            background: radial-gradient(circle at 35% 35%, color.adjust($hex, $lightness: 20%), $hex 60%, color.adjust($hex, $lightness: -20%));
         }
     }
 

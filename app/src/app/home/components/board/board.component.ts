@@ -72,10 +72,23 @@ export class BoardComponent implements OnInit {
 
   calculateSquareSize() {
     const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight - 56;
-    const sizeBasedOnWidth = viewportWidth / this.gridSize;
-    const sizeBasedOnHeight = viewportHeight / this.gridSize;
-    this.squareSize = Math.min(sizeBasedOnWidth, sizeBasedOnHeight);
+    const viewportHeight = window.innerHeight;
+
+    // 1. Récupérer la hauteur réelle du header Ionic
+    const header = document.querySelector('ion-header');
+    const headerHeight = header ? header.offsetHeight : 56;
+
+    // 2. Calculer l'espace total disponible pour le layout de jeu
+    // On soustrait le header et le padding vertical de 2% + 2% (4vh)
+    const availableHeight = viewportHeight - headerHeight - (viewportHeight * 0.04);
+    const availableWidth = viewportWidth - (viewportWidth * 0.04); // Marge 2vw à gauche et droite
+
+    // 3. Calculer la taille de la case basée sur la largeur et la hauteur
+    const sizeBasedOnWidth = availableWidth / this.gridSize;
+    const sizeBasedOnHeight = availableHeight / this.gridSize;
+
+    // 4. Prendre le minimum et appliquer un facteur de sécurité pour les bordures
+    this.squareSize = Math.min(sizeBasedOnWidth, sizeBasedOnHeight) * 0.95;
   }
 
   get rows(): number[] { return Array(this.gridSize).fill(0).map((_, i) => i); }

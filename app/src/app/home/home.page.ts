@@ -1,22 +1,19 @@
-import { Component, signal } from '@angular/core';
-import { IonHeader, IonToolbar, IonTitle, IonContent } from '@ionic/angular/standalone';
+import { Component } from '@angular/core';
+import { IonHeader, IonToolbar, IonTitle, IonContent, ViewDidEnter } from '@ionic/angular/standalone';
 import { BoardComponent } from './components/board/board.component';
 import { TableComponent } from './components/table/table.component';
-import { TestComponent } from './components/test.component';
 import { GameStateService } from './services/game-state.service';
-import { GameState } from './models';
 
 @Component({
   selector: 'app-home',
   templateUrl: 'home.page.html',
   styleUrl: 'home.page.scss',
-  imports: [IonHeader, IonToolbar, IonTitle, IonContent, BoardComponent, TableComponent, TestComponent],
+  imports: [IonHeader, IonToolbar, IonTitle, IonContent, BoardComponent, TableComponent],
 })
-export class HomePage {
+export class HomePage implements ViewDidEnter {
 
   constructor(public gameStateService: GameStateService) { }
-
-  ngOnInit() {
+  ionViewDidEnter(): void {
     this.connect();
   }
 
