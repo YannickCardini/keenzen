@@ -4,14 +4,14 @@ interface Card {
   value: string;
 }
 
-interface Player {
+export interface Player {
   isConnected: boolean;
   name: string;
   color: string;
   marblePositions: number[];
 }
 
-type PlayerColor = 'red' | 'green' | 'blue' | 'orange';
+export type PlayerColor = 'red' | 'green' | 'blue' | 'orange';
 
 export interface GameState {
   players: Player[];
