@@ -3,18 +3,15 @@
     @for (row of rows; track row) {
     <ion-row class="tock-row">
       @for (col of cols; track col) {
-
       @let index = getSquareIndex(row, col);
 
       @if (!shouldSkip(index)) {
-
       <ion-col class="tock-col" [class.span-5]="playerInfoStarts[index]">
 
         @if (playerInfoStarts[index]; as pColor) {
         @let player = getPlayer(pColor);
         <div class="player-card" [class.active-turn]="isCurrentTurn(pColor)"
           [class.disconnected]="player && !player.isConnected" [ngClass]="'theme-' + pColor">
-
           <div class="avatar-ring">
             <div class="avatar-color"></div>
           </div>
@@ -31,10 +28,12 @@
             <div class="marble-highlight"></div>
           </div>
           }
-          <span class="square-number"> {{index}}</span>
+
+          <span class="square-number">
+            {{ debug ? index : '' }}
+          </span>
         </div>
         }
-
       </ion-col>
       }
       }
