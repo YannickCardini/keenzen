@@ -84,14 +84,20 @@
     align-items: center;
     gap: 6px;
 
-    /* Caché si l'écran est trop petit (largeur ou hauteur) */
-    @media (max-width: 780px) {
-        display: none;
+    // Mobile
+    @media (max-aspect-ratio: 1/1) {
+
+        /* Caché si l'écran est trop petit (largeur ou hauteur) */
+        @media (max-width: 780px) {
+            display: none;
+        }
+
+        @media (max-height: 500px) {
+            display: none;
+        }
     }
 
-    @media (max-height: 500px) {
-        display: none;
-    }
+
 }
 
 .timer-ring {
@@ -181,14 +187,19 @@
     align-items: center;
     justify-content: center;
 
-    /* Caché sur petits écrans */
-    @media (max-width: 780px) {
-        display: none;
+    //Mobile
+    @media (max-aspect-ratio: 1/1) {
+
+        /* Caché si l'écran est trop petit (largeur ou hauteur) */
+        @media (max-width: 780px) {
+            display: none;
+        }
+
+        @media (max-height: 500px) {
+            display: none;
+        }
     }
 
-    @media (max-height: 500px) {
-        display: none;
-    }
 }
 
 /* Turn phase badge */
@@ -413,6 +424,10 @@
     max-width: 900px;
     margin: 0 auto;
     gap: 1rem;
+
+    @container (max-width: 280px) {
+        justify-content: center;
+    }
 }
 
 .player-profile {
@@ -422,6 +437,10 @@
     color: white;
     flex: 1;
     min-width: 0;
+
+    @container (max-width: 280px) {
+        display: none;
+    }
 }
 
 .avatar {
