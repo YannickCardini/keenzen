@@ -2,7 +2,7 @@ const WebSocket = require('ws');
 
 const wss = new WebSocket.Server({ port: 8080 });
 
-const TIMER_DURATION = 20; // Durée du timer en secondes
+const TIMER_DURATION = 4; // Durée du timer en secondes
 
 // Jeu de 52 cartes
 const DECK = [
@@ -78,12 +78,12 @@ function shuffleDeck(deck) {
 }
 
 // Fonction pour générer des positions aléatoires pour les billes (4 positions entre 0 et 63)
-function generateRandomMarblePositions(color) {
+function generateRandomMarblePositions(color, turn = 1) {
     switch (color) {
         case 'red':
-            return [3, 18, 33, 48];
+            return generatedRedTurnPosition(turn)
         case 'green':
-            return [13, 28, 43, 58];
+            return generatedGreenTurnPosition(turn)
         case 'orange':
             return [178, 193, 208, 223];
         case 'blue':
@@ -94,6 +94,32 @@ function generateRandomMarblePositions(color) {
     // return Array.from({ length: 4 }, () => Math.floor(Math.random() * 220));
 }
 
+function generatedRedTurnPosition(turn) {
+    switch (turn) {
+        case 1:
+            return [3, 18, 33, 48]
+        case 2:
+            return [9, 18, 33, 48];
+        case 3:
+            return [9, 18, 33, 48];
+        case 4:
+            return [135, 18, 33, 48];
+        default:
+            return [3, 18, 33, 48];
+    }
+}
+
+function generatedGreenTurnPosition(turn) {
+    switch (turn) {
+        case 3:
+            return [135, 28, 43, 58];
+        case 4:
+            return [9, 28, 43, 58];
+        default:
+            return [13, 28, 43, 58]
+    }
+}
+
 // Fonction pour piocher N cartes aléatoires
 function drawCards(count) {
     const shuffled = shuffleDeck(DECK);
@@ -101,35 +127,73 @@ function drawCards(count) {
 }
 
 // Fonction pour générer un Player
-function generatePlayer(name, color, isConnected = true) {
+function generatePlayer(name, color, isConnected = true, turn = 1) {
     return {
         isConnected: isConnected,
         name: name,
         color: color,
-        marblePositions: generateRandomMarblePositions(color)
+        marblePositions: generateRandomMarblePositions(color, turn)
     };
 }
 
-// Fonction pour générer un GameState aléatoire
-function generateGameState() {
+function generateCurrentTurn(turn = 1) {
     const colors = ['red', 'green', 'blue', 'orange'];
-    const currentTurn = {
-        color: colors[Math.floor(Math.random() * colors.length)],
-        lastAction: {
-                type: 'move',
-                from: 48,
-                to: 9
-        }, // Action aléatoire (ex: marble position 48 to position 9)
-        lastCardPlayed: drawCards(1)[0]
-    };
+    switch (turn) {
+        case 2:
+            return {
+                color: 'red',
+                lastAction: {
+                    type: 'enter',
+                    from: 3,
+                    to: 9
+                },
+                lastCardPlayed: drawCards(1)[0]
+            };
+        case 3:
+            return {
+                color: 'green',
+                lastAction: {
+                    type: 'enter',
+                    from: 13,
+                    to: 135
+                },
+                lastCardPlayed: drawCards(1)[0]
+            };
+        case 4:
+            return {
+                color: 'red',
+                lastAction: {
+                    type: 'swap',
+                    from: 9,
+                    to: 135
+                },
+                lastCardPlayed: drawCards(1)[0]
+            };
+        default:
+            return {
+                color: colors[Math.floor(Math.random() * colors.length)],
+                lastAction: {
+                    type: 'enter', // Type d'action (ex: 'move', 'capture', 'swap', 'promote', 'enter')
+                    from: 48,
+                    to: 9
+                }, // Action aléatoire (ex: marble position 48 to position 9)
+                lastCardPlayed: drawCards(1)[0]
+            };
+    }
+}
+
+// Fonction pour générer un GameState aléatoire
+function generateGameState(turn = 1) {
+    const colors = ['red', 'green', 'blue', 'orange'];
+    const currentTurn = generateCurrentTurn(turn);
     const timer = TIMER_DURATION;
 
     // Génération des 4 joueurs
     const players = [
-        generatePlayer('Player 1', 'red', true),
-        generatePlayer('Player 2', 'green', true),
-        generatePlayer('Player 3', 'orange', true),
-        generatePlayer('Player 4', 'blue', true)
+        generatePlayer('Player 1', 'red', true, turn),
+        generatePlayer('Player 2', 'green', true, turn),
+        generatePlayer('Player 3', 'orange', true, turn),
+        generatePlayer('Player 4', 'blue', true, turn)
     ];
 
     return {
@@ -144,20 +208,21 @@ function generateGameState() {
 
 wss.on('connection', (ws) => {
     console.log('✅ Client connecté');
-
+    let turn = 1;
     // Envoie un message de bienvenue avec le GameState initial
     ws.send(JSON.stringify({
         type: 'welcome',
         message: 'Connexion réussie!',
         timestamp: new Date().toISOString(),
-        gameState: generateGameState()
+        gameState: generateGameState(turn)
     }));
 
     // Envoie un nouveau GameState toutes les 30 secondes
     const interval = setInterval(() => {
+        turn++;
         ws.send(JSON.stringify({
             type: 'gameState',
-            gameState: generateGameState(),
+            gameState: generateGameState(turn),
             timestamp: new Date().toISOString(),
             message: 'New turn generated'
         }));

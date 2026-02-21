@@ -136,6 +136,38 @@ $colors: (
     }
 }
 
+/* --- Animation : Entrée en jeu d'un pion ('enter') --- */
+@keyframes marbleDrop {
+  0% {
+    transform: translateY(-200%) scale(0.4);
+    opacity: 0;
+    box-shadow: 0 40px 20px rgba(0, 0, 0, 0.3);
+  }
+  55% {
+    transform: translateY(10%) scale(1.08);
+    opacity: 1;
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45);
+  }
+  72% {
+    transform: translateY(-8%) scale(0.95);
+    box-shadow: 0 10px 16px rgba(0, 0, 0, 0.35);
+  }
+  85% {
+    transform: translateY(4%) scale(1.02);
+  }
+  100% {
+    transform: translateY(0%) scale(1);
+    opacity: 1;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), inset -2px -2px 6px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.marble.marble-entering {
+  animation: marbleDrop 0.75s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  // On désactive le hover pendant l'animation pour ne pas interférer
+  pointer-events: none;
+}
+
 /* --- Cartes Joueurs (Intégrées à la grille) --- */
 .player-card {
     display: flex;

@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit } from '@angular/core';
+import { Component, HostListener, OnInit, signal, effect } from '@angular/core';
 import { GameStateService } from '../../services/game-state.service';
 import { Player, PlayerColor } from '../../models'; // Ajuste le chemin si besoin
 import { IonCol, IonGrid, IonRow } from '@ionic/angular/standalone';
@@ -15,6 +15,10 @@ export class BoardComponent implements OnInit {
   gridSize = 15;
   squareSize: number = 0;
   squareToDisplay: number[] = [];
+
+  /** Index de la case dont le pion est en cours d'animation (action 'enter') */
+  animatedSquare = signal<number | null>(null);
+  private animationTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Définition des cases spéciales
   homes: Record<PlayerColor, number[]> = {
@@ -54,7 +58,17 @@ export class BoardComponent implements OnInit {
 
   debug = true; // Affiche les numéros de cases pour le debug
 
-  constructor(private gameStateService: GameStateService) { }
+  constructor(private gameStateService: GameStateService) {
+    // Réagit à chaque changement de lastAction pour l'action 'enter'
+    effect(() => {
+      const lastAction = this.gameStateService.data()?.gameState?.currentTurn?.lastAction;
+      if (lastAction?.type === 'enter') {
+        if (this.animationTimeout) clearTimeout(this.animationTimeout);
+        this.animatedSquare.set(lastAction.to);
+        this.animationTimeout = setTimeout(() => this.animatedSquare.set(null), 800);
+      }
+    });
+  }
 
   ngOnInit() {
     this.calculateSquareSize();

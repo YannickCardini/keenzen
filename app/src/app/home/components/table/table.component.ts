@@ -71,7 +71,6 @@ export class TableComponent implements OnInit, OnDestroy {
   // ── Timer ──────────────────────────────────────────────────────
   private startTimer(): void {
     this.clearTimer();
-    console.log(this.gameStateService.data()?.gameState?.timer)
     this.timeLeft.set(this.gameStateService.data()?.gameState?.timer ?? 0);
     this.timerInterval = setInterval(() => {
       const current = this.timeLeft();
@@ -174,7 +173,7 @@ export class TableComponent implements OnInit, OnDestroy {
   getPlayerName(): string {
     const gameData = this.gameStateService.data();
     return gameData?.gameState.players.find(
-      (p: any) => p.color === gameData.gameState.currentTurn
+      (p: any) => p.color === gameData.gameState.currentTurn.color
     )?.name || 'Inconnu';
   }
 

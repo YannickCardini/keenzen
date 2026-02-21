@@ -31,6 +31,7 @@ export class GameStateService {
       // Met à jour le signal automatiquement
       this.data.set(JSON.parse(event.data));
       this.message.set(`Message reçu: ${event.data}`);
+      console.log('Données mises à jour:', this.data());
       if (this.data()?.message === 'New turn generated') {
         //need to reset timer
         this.newTurn.next(new Date());
