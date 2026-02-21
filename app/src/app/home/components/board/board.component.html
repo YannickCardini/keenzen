@@ -22,9 +22,10 @@
         }
 
         @else {
-        <div [class]="getSquareClass(index)">
+        <div [class]="getSquareClass(index)" [ngClass]="getSquareAnimClass(index)">
           @if (getMarbleOnSquare(index); as marbleColor) {
-          <div class="marble" [ngClass]="['marble-' + marbleColor, animatedSquare() === index ? 'marble-entering' : '']">
+          <div class="marble"
+               [ngClass]="['marble-' + marbleColor, getMarbleAnimClass(index)]">
             <div class="marble-highlight"></div>
           </div>
           }

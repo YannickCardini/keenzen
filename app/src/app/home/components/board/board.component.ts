@@ -1,9 +1,16 @@
 import { Component, HostListener, OnInit, signal, effect } from '@angular/core';
 import { GameStateService } from '../../services/game-state.service';
-import { Player, PlayerColor } from '../../models'; // Ajuste le chemin si besoin
+import { Player, PlayerColor } from '../../models';
 import { IonCol, IonGrid, IonRow } from '@ionic/angular/standalone';
 import { CommonModule } from '@angular/common';
 import { getSquareToDisplay as getSquare } from './square-data';
+
+export interface SquareAnimation {
+  /** Classe CSS à appliquer sur le .marble */
+  marbleClass: string;
+  /** Classe CSS optionnelle à appliquer sur la .case-path */
+  squareClass?: string;
+}
 
 @Component({
   selector: 'app-board',
@@ -16,9 +23,22 @@ export class BoardComponent implements OnInit {
   squareSize: number = 0;
   squareToDisplay: number[] = [];
 
-  /** Index de la case dont le pion est en cours d'animation (action 'enter') */
-  animatedSquare = signal<number | null>(null);
-  private animationTimeout: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Map index de case → animation en cours.
+   * Signal sur un Record pour que le template réagisse aux changements.
+   */
+  squareAnimations = signal<Record<number, SquareAnimation>>({});
+
+  private animationTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
+
+  // Durées par type d'action (ms) — doit correspondre à la durée CSS
+  private readonly ANIMATION_DURATIONS: Record<string, number> = {
+    enter:   800,
+    move:    600,
+    capture: 700,
+    swap:    900,
+    promote: 1000,
+  };
 
   // Définition des cases spéciales
   homes: Record<PlayerColor, number[]> = {
@@ -56,18 +76,94 @@ export class BoardComponent implements OnInit {
     162, 163, 164, 165
   ];
 
-  debug = true; // Affiche les numéros de cases pour le debug
+  debug = true;
 
   constructor(private gameStateService: GameStateService) {
-    // Réagit à chaque changement de lastAction pour l'action 'enter'
     effect(() => {
       const lastAction = this.gameStateService.data()?.gameState?.currentTurn?.lastAction;
-      if (lastAction?.type === 'enter') {
-        if (this.animationTimeout) clearTimeout(this.animationTimeout);
-        this.animatedSquare.set(lastAction.to);
-        this.animationTimeout = setTimeout(() => this.animatedSquare.set(null), 800);
+      if (!lastAction) return;
+
+      const duration = this.ANIMATION_DURATIONS[lastAction.type] ?? 700;
+
+      switch (lastAction.type) {
+
+        // Entrée en jeu : le pion "tombe" du ciel sur sa case de départ
+        case 'enter':
+          this.triggerAnimation(lastAction.to, { marbleClass: 'marble-entering' }, duration);
+          break;
+
+        // Déplacement : le pion pulse sur sa nouvelle case
+        case 'move':
+          this.triggerAnimation(lastAction.to, { marbleClass: 'marble-moving' }, duration);
+          break;
+
+        // Capture : impact sur la case de destination, exit sur la source (pion renvoyé à la maison)
+        case 'capture':
+          this.triggerAnimation(lastAction.to, {
+            marbleClass:  'marble-capturing',
+            squareClass:  'square-impact'
+          }, duration);
+          this.triggerAnimation(lastAction.from, {
+            marbleClass: 'marble-captured-exit'
+          }, duration);
+          break;
+
+        // Échange : les deux cases scintillent de façon miroir
+        case 'swap':
+          this.triggerAnimation(lastAction.from, { marbleClass: 'marble-swapping' }, duration);
+          this.triggerAnimation(lastAction.to,   { marbleClass: 'marble-swapping' }, duration);
+          break;
+
+        // Promotion : rayonnement doré, le pion grossit puis se stabilise
+        case 'promote':
+          this.triggerAnimation(lastAction.to, {
+            marbleClass: 'marble-promoting',
+            squareClass: 'square-promoting'
+          }, duration);
+          break;
       }
     });
+  }
+
+  /**
+   * Déclenche une animation sur une case. Pour forcer le re-trigger CSS si
+   * la même classe est déjà présente, on passe d'abord par un état vide (RAF).
+   */
+  private triggerAnimation(index: number, anim: SquareAnimation, duration: number): void {
+    const existing = this.animationTimeouts.get(index);
+    if (existing) clearTimeout(existing);
+
+    // Retire d'abord la classe pour forcer le redémarrage de l'animation CSS
+    this.squareAnimations.update(prev => {
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+
+    requestAnimationFrame(() => {
+      this.squareAnimations.update(prev => ({ ...prev, [index]: anim }));
+
+      const timeout = setTimeout(() => {
+        this.squareAnimations.update(prev => {
+          const next = { ...prev };
+          delete next[index];
+          return next;
+        });
+        this.animationTimeouts.delete(index);
+      }, duration);
+
+      this.animationTimeouts.set(index, timeout);
+    });
+  }
+
+  /** Classes CSS d'animation pour le .marble d'une case */
+  getMarbleAnimClass(index: number): string {
+    return this.squareAnimations()[index]?.marbleClass ?? '';
+  }
+
+  /** Classes CSS d'animation pour la .case-path d'une case */
+  getSquareAnimClass(index: number): string {
+    return this.squareAnimations()[index]?.squareClass ?? '';
   }
 
   ngOnInit() {
@@ -88,21 +184,17 @@ export class BoardComponent implements OnInit {
     const wrapper = document.querySelector('.board-wrapper');
     if (!wrapper) return;
 
-    // On récupère les dimensions exactes du parent allouées par le CSS
     const bounds = wrapper.getBoundingClientRect();
     const maxWidth = bounds.width;
     const maxHeight = bounds.height;
 
-    // On prend la plus petite dimension pour garantir un plateau carré
-    // On retire une marge de sécurité de 5% pour le padding interne et les bordures
     const containerSize = Math.min(maxWidth, maxHeight) * 0.95;
-
     this.squareSize = containerSize / this.gridSize;
     this.gameStateService.boardContainerSize.set(this.calculateTableWrapperSize(containerSize));
   }
 
   private calculateTableWrapperSize(containerSize: number): number {
-    const borderSize = 2; // border de 1 px de chaque côté
+    const borderSize = 2;
     const padding = 0.2;
     return (containerSize + borderSize) + (((containerSize + borderSize) / this.gridSize) * padding) * 2;
   }

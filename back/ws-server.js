@@ -2,7 +2,7 @@ const WebSocket = require('ws');
 
 const wss = new WebSocket.Server({ port: 8080 });
 
-const TIMER_DURATION = 4; // Durée du timer en secondes
+const TIMER_DURATION = 1; // Durée du timer en secondes
 
 // Jeu de 52 cartes
 const DECK = [
@@ -104,6 +104,12 @@ function generatedRedTurnPosition(turn) {
             return [9, 18, 33, 48];
         case 4:
             return [135, 18, 33, 48];
+        case 5:
+            return [135, 18, 33, 48];
+        case 6:
+            return [38, 18, 33, 48];
+        case 7:
+            return [38, 18, 33, 48];
         default:
             return [3, 18, 33, 48];
     }
@@ -115,6 +121,12 @@ function generatedGreenTurnPosition(turn) {
             return [135, 28, 43, 58];
         case 4:
             return [9, 28, 43, 58];
+        case 5:
+            return [70, 28, 43, 58];
+        case 6:
+            return [70, 28, 43, 58];
+        case 7:
+            return [38, 28, 43, 58];
         default:
             return [13, 28, 43, 58]
     }
@@ -166,6 +178,36 @@ function generateCurrentTurn(turn = 1) {
                     type: 'swap',
                     from: 9,
                     to: 135
+                },
+                lastCardPlayed: drawCards(1)[0]
+            };
+        case 5:
+            return {
+                color: 'green',
+                lastAction: {
+                    type: 'move',
+                    from: 9,
+                    to: 70
+                },
+                lastCardPlayed: drawCards(1)[0]
+            };
+        case 6:
+            return {
+                color: 'red',
+                lastAction: {
+                    type: 'promote',
+                    from: 135,
+                    to: 38
+                },
+                lastCardPlayed: drawCards(1)[0]
+            };
+        case 7:
+            return {
+                color: 'green',
+                lastAction: {
+                    type: 'capture',
+                    from: 70,
+                    to: 38
                 },
                 lastCardPlayed: drawCards(1)[0]
             };
