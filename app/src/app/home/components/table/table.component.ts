@@ -25,27 +25,17 @@ interface Card {
 })
 export class TableComponent implements OnInit, OnDestroy {
 
-  /** Durée totale du tour en secondes */
-  readonly TURN_DURATION = 30;
-
   /** Circonférence du cercle SVG (rayon = 27.5) */
   readonly timerCircumference = 2 * Math.PI * 27.5; // ≈ 172.79
-
+  timeLeft = signal(0);
+  timerInterval?: any; // Type 'any' pour setInterval, car il retourne un NodeJS.Timeout dans Node et un number dans le navigateur. --- IGNORE ---
   // ── Signaux UI ─────────────────────────────────────────────────
   selectedCardIndex = signal<number | null>(null);
   turnPhase = signal<string>('Choisissez une carte');
-  timeLeft = signal<number>(this.TURN_DURATION);
 
   // ── Dérivés ────────────────────────────────────────────────────
   canConfirm = computed(() => this.selectedCardIndex() !== null);
 
-  /** Fraction de temps restant [0–1] */
-  private timeRatio = computed(() => this.timeLeft() / this.TURN_DURATION);
-
-  /** Offset SVG pour l'arc du timer */
-  timerDashOffset = computed(() =>
-    this.timerCircumference * (1 - this.timeRatio())
-  );
 
   /** Couleur de l'arc : vert → orange → rouge */
   timerColor = computed(() => {
@@ -55,12 +45,23 @@ export class TableComponent implements OnInit, OnDestroy {
     return '#f87171'; // rouge
   });
 
-  private timerInterval?: ReturnType<typeof setInterval>;
+  timerDashOffset = computed(() => {
+    const ratio = this.timeRatio();
+    return this.timerCircumference * (1 - ratio);
+  });
+
+  timeRatio = computed(() => {
+    const timer = this.gameStateService.data()?.gameState?.timer ?? 0;
+    return timer > 0 ? this.timeLeft() / timer : 0;
+  })
+
 
   constructor(private gameStateService: GameStateService) { }
 
   ngOnInit(): void {
-    this.startTimer();
+    this.gameStateService.newTurn.subscribe(() => {
+      this.startTimer();
+    })
   }
 
   ngOnDestroy(): void {
@@ -70,6 +71,8 @@ export class TableComponent implements OnInit, OnDestroy {
   // ── Timer ──────────────────────────────────────────────────────
   private startTimer(): void {
     this.clearTimer();
+    console.log(this.gameStateService.data()?.gameState?.timer)
+    this.timeLeft.set(this.gameStateService.data()?.gameState?.timer ?? 0);
     this.timerInterval = setInterval(() => {
       const current = this.timeLeft();
       if (current <= 1) {
@@ -90,7 +93,7 @@ export class TableComponent implements OnInit, OnDestroy {
   }
 
   private resetTimer(): void {
-    this.timeLeft.set(this.TURN_DURATION);
+    this.timeLeft.set(this.gameStateService.data()?.gameState?.timer ?? 0);
     this.startTimer();
   }
 
@@ -177,7 +180,7 @@ export class TableComponent implements OnInit, OnDestroy {
 
   getPlayerColor(): string {
     const gameData = this.gameStateService.data();
-    return gameData?.gameState.currentTurn || '#7c3aed';
+    return gameData?.gameState.currentTurn.color || '#7c3aed';
   }
 
   getDiscardedCards(): Card[] {

@@ -15,6 +15,7 @@ export class GameStateService {
 
   // Computed signal that automatically updates when data changes
   hand = computed(() => this.data()?.gameState?.hand ?? []);
+  newTurn = new BehaviorSubject<Date>(new Date());
 
   private ws: WebSocket | null = null;
 
@@ -30,6 +31,10 @@ export class GameStateService {
       // Met à jour le signal automatiquement
       this.data.set(JSON.parse(event.data));
       this.message.set(`Message reçu: ${event.data}`);
+      if (this.data()?.message === 'New turn generated') {
+        //need to reset timer
+        this.newTurn.next(new Date());
+      }
     };
 
     this.ws.onerror = () => {

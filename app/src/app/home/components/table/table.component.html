@@ -41,7 +41,7 @@
           </div>
         </button>
       } @empty {
-        <div class="empty-hand">Votre main est vide</div>
+        <div class="empty-hand">Your hand is empty</div>
       }
     </div>
   </div>
@@ -61,13 +61,13 @@
       <div class="player-profile">
         <div class="avatar" [style.background-color]="getPlayerColor()"></div>
         <div class="player-info">
-          <span class="label">En train de jouer</span>
+          <span class="label">Currently playing</span>
           <strong>{{ getPlayerName() }}</strong>
         </div>
       </div>
 
       <button class="action-btn" [disabled]="!canConfirm()" (click)="confirmMove()">
-        Confirmer
+        Confirm
       </button>
 
     </div>

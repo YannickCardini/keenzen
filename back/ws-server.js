@@ -2,6 +2,8 @@ const WebSocket = require('ws');
 
 const wss = new WebSocket.Server({ port: 8080 });
 
+const TIMER_DURATION = 20; // Durée du timer en secondes
+
 // Jeu de 52 cartes
 const DECK = [
     // ♥ Cœur (Hearts)
@@ -111,7 +113,16 @@ function generatePlayer(name, color, isConnected = true) {
 // Fonction pour générer un GameState aléatoire
 function generateGameState() {
     const colors = ['red', 'green', 'blue', 'orange'];
-    const currentTurn = colors[Math.floor(Math.random() * colors.length)];
+    const currentTurn = {
+        color: colors[Math.floor(Math.random() * colors.length)],
+        lastAction: {
+                type: 'move',
+                from: 48,
+                to: 9
+        }, // Action aléatoire (ex: marble position 48 to position 9)
+        lastCardPlayed: drawCards(1)[0]
+    };
+    const timer = TIMER_DURATION;
 
     // Génération des 4 joueurs
     const players = [
@@ -126,6 +137,7 @@ function generateGameState() {
         isConnected: true,
         currentTurn: currentTurn,
         hand: drawCards(5),
+        timer: timer,
         discardedCards: drawCards(Math.floor(Math.random() * 6)) // 0 à 5 cartes défaussées
     };
 }
@@ -146,9 +158,10 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({
             type: 'gameState',
             gameState: generateGameState(),
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            message: 'New turn generated'
         }));
-    }, 30000);
+    }, TIMER_DURATION * 1000);
 
     // Écoute les messages du client
     ws.on('message', (message) => {

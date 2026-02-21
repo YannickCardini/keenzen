@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { IonHeader, IonToolbar, IonTitle, IonContent, ViewDidEnter } from '@ionic/angular/standalone';
+import { IonContent, ViewDidEnter } from '@ionic/angular/standalone';
 import { BoardComponent } from './components/board/board.component';
 import { TableComponent } from './components/table/table.component';
 import { GameStateService } from './services/game-state.service';
@@ -8,7 +8,7 @@ import { GameStateService } from './services/game-state.service';
   selector: 'app-home',
   templateUrl: 'home.page.html',
   styleUrl: 'home.page.scss',
-  imports: [IonHeader, IonToolbar, IonTitle, IonContent, BoardComponent, TableComponent],
+  imports: [IonContent, BoardComponent, TableComponent],
 })
 export class HomePage implements ViewDidEnter {
 

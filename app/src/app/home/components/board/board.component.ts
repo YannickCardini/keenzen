@@ -52,7 +52,7 @@ export class BoardComponent implements OnInit {
     162, 163, 164, 165
   ];
 
-  debug = false; // Affiche les numéros de cases pour le debug
+  debug = true; // Affiche les numéros de cases pour le debug
 
   constructor(private gameStateService: GameStateService) { }
 
@@ -85,7 +85,6 @@ export class BoardComponent implements OnInit {
 
     this.squareSize = containerSize / this.gridSize;
     this.gameStateService.boardContainerSize.set(this.calculateTableWrapperSize(containerSize));
-    console.log(`Calculated square size: ${this.squareSize}px (Container: ${containerSize}px)`);
   }
 
   private calculateTableWrapperSize(containerSize: number): number {
@@ -128,7 +127,7 @@ export class BoardComponent implements OnInit {
 
   isCurrentTurn(color: PlayerColor): boolean {
     const gameData = this.gameStateService.data();
-    return gameData?.gameState.currentTurn === color;
+    return gameData?.gameState.currentTurn.color === color;
   }
 
   getMarbleOnSquare(index: number): PlayerColor | null {
