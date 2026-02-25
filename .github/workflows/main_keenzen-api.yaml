@@ -27,7 +27,7 @@ jobs:
       # 2. Build du backend en référençant le shared buildé
       - name: Build backend
         run: |
-          cd apps/backend
+          cd backend
           npm install
           npm run build --if-present
 
@@ -38,9 +38,9 @@ jobs:
       - name: Prepare deployment package
         run: |
           mkdir -p deploy
-          cp -r apps/backend/dist        deploy/
-          cp    apps/backend/package.json deploy/
-          cp    apps/backend/package-lock.json deploy/ 2>/dev/null || true
+          cp -r backend/dist        deploy/
+          cp    backend/package.json deploy/
+          cp    backend/package-lock.json deploy/ 2>/dev/null || true
           # Copie le shared buildé dans node_modules pour qu'Azure le trouve
           mkdir -p deploy/node_modules/@keezen
           cp -r packages/shared/dist deploy/node_modules/@keezen/shared
