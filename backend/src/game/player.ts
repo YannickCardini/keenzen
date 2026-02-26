@@ -1,11 +1,50 @@
 import type { Action, Card, MarbleColor } from "@keezen/shared";
-import { calculateMoveFromCardAndMarble, sleep } from "../utils/utils.js";
+import { HOME_POSITIONS, getStartPosition } from "@keezen/shared";
+import {
+    findLegalMoveForCard,
+    isOnMainPath,
+    sleep,
+    type LegalMoveContext,
+} from "../utils/utils.js";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Priorité des cartes pour l'IA
+//
+// L'IA essaie les cartes dans cet ordre de préférence :
+//  1. A/K  → entrer un pion en jeu est toujours prioritaire
+//  2. Q    → avance de 12, très efficace
+//  3. 10   → avance de 10
+//  4. 9    → avance de 9
+//  5. 8    → avance de 8
+//  6. 6    → avance de 6
+//  7. 5    → avance de 5
+//  8. 3    → avance de 3
+//  9. 2    → avance de 2
+// 10. A    → utilisé comme 1 si pas d'entrée possible
+//
+// Cartes non gérées pour l'instant → pass :
+//  - J (swap) : nécessite les positions adverses
+//  - 7 (split): action multi-pion
+//  - 4 (recul): logique inverse
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AI_CARD_PRIORITY: Card['value'][] = [
+    'K', 'A',  // entrée en jeu en premier
+    'Q',        // grands déplacements
+    '10', '9', '8', '6', '5', '3', '2',
+    // J, 7, 4 : non gérés → seront passés
+];
 
 export class Player {
 
     public cards: Card[] = [];
     public isConnected: boolean = false;
 
+    /**
+     * Positions de tous les pions sur le plateau (toutes couleurs confondues).
+     * Mis à jour par Game avant chaque tour pour que l'IA ait une vision globale.
+     */
+    public allMarblesOnBoard: number[] = [];
 
     constructor(
         public isHuman: boolean,
@@ -16,66 +55,86 @@ export class Player {
         this.isConnected = true;
     }
 
-    async getPlayerAction(): Promise<Action> {
-        // Logic to determine the player's action based on the game state and player type (human or AI)
-        // This is a placeholder and should be implemented with actual game logic
-        if (this.isHuman) {
-            console.log(`${this.name} is a human player. Waiting for user input...`);
-            // Here you would typically wait for user input from the frontend
-        } else {
-            console.log(`${this.name} is an AI player. Calculating move...`);
-            return this.calculateAIMove();
-        }
-        return this.calculateAIMove();
+    // ── Interface principale ─────────────────────────────────────────────────
 
+    async getPlayerAction(): Promise<Action> {
+        if (this.isHuman) {
+            console.log(`${this.name} est un joueur humain. En attente de l'input...`);
+            // Sera implémenté avec la connexion WebSocket du joueur humain
+            return this.calculateAIMove(); // fallback temporaire
+        }
+
+        console.log(`${this.name} (IA) calcule son coup...`);
+        return this.calculateAIMove();
     }
 
+    // ── Logique IA ───────────────────────────────────────────────────────────
+
     async calculateAIMove(): Promise<Action> {
-        // AI move calculation logic would go here
-        console.log(`${this.name} is calculating an AI move.`);
-        await sleep(5000); // Simulate thinking time for AI
-        const chosenCard = this.calculateAICardChoice();
-        const chosenMarble = this.calculateAIMarbleChoice();
-        if (chosenCard) {
-            console.log(`${this.name} chooses to play ${chosenCard.value} of ${chosenCard.suit}.`);
-            return calculateMoveFromCardAndMarble(chosenCard, chosenMarble, this.color);
-        } else {
-            console.log(`${this.name} has no valid cards to play.`);
+        await sleep(8500); // simule un temps de réflexion
+
+        const ctx = this.buildContext();
+
+        // Essaie les cartes par ordre de priorité
+        for (const targetValue of AI_CARD_PRIORITY) {
+            const card = this.cards.find(c => c.value === targetValue);
+            if (!card) continue;
+
+            const action = findLegalMoveForCard(card, ctx);
+            if (action) {
+                console.log(`${this.name} joue ${card.value}${card.suit} → ${action.type} [${action.from} → ${action.to}]`);
+                this.removeCardFromHand(card);
+                return action;
+            }
         }
+
+        // Aucun coup légal trouvé : passe et défausse toute la main
+        console.log(`${this.name} ne peut jouer aucune carte → passe`);
+        this.discardHand();
+        return this.passAction();
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /**
+     * Construit le contexte nécessaire à la validation des coups légaux.
+     * `allMarblesOnBoard` doit avoir été mis à jour par Game avant l'appel.
+     */
+    private buildContext(): LegalMoveContext {
+        return {
+            ownMarbles: [...this.marblePositions],
+            allMarbles: this.allMarblesOnBoard.length > 0
+                ? [...this.allMarblesOnBoard]
+                : [...this.marblePositions], // fallback si pas encore alimenté
+            playerColor: this.color,
+        };
+    }
+
+    private removeCardFromHand(card: Card): void {
+        const index = this.cards.indexOf(card);
+        if (index !== -1) this.cards.splice(index, 1);
+    }
+
+    /**
+     * Défausse toute la main (règle : si on ne peut jouer aucune carte,
+     * on défausse toute sa main face visible).
+     */
+    private discardHand(): void {
+        console.log(`${this.name} défausse sa main (${this.cards.length} cartes)`);
+        this.cards = [];
+    }
+
+    private passAction(): Action {
         return {
             type: 'pass',
             from: 0,
-            to: 0
-        } as Action;
-    }
-
-    calculateAICardChoice(): Card | undefined {
-        if (this.cards.length == 0) {
-            console.log(`${this.name} has no cards left to play.`);
-            return undefined;
-        }
-        // if there's an As or King, play it
-        const hasAsOrKing = this.cards.some(card => card.value === 'A' || card.value === 'K');
-        console.log(`${this.name} has ${this.cards.length} cards. Has As or King: ${hasAsOrKing}`);
-        if (hasAsOrKing) {
-            const chosenCard = this.cards.find(card => card.value === 'A' || card.value === 'K');
-            console.log(`${this.name} has an As or King and chooses to play it.`);
-            return chosenCard;
-        }
-        return undefined;
-
-    }
-
-    calculateAIMarbleChoice(): number {
-        const chosenMarble = this.marblePositions[0] || 0; // Just choose the first marble for now
-        console.log(`${this.name} chooses to move marble at position ${chosenMarble}.`);
-        return chosenMarble;
+            to: 0,
+            cardPlayed: null,
+            playerColor: this.color,
+        };
     }
 
     handEmpty(): boolean {
         return this.cards.length === 0;
     }
-
-
 }
-

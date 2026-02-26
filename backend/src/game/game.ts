@@ -10,7 +10,6 @@ import {
     CARD_LAND_DELAY_MS,
 } from '@keezen/shared';
 import type { Action } from "@keezen/shared";
-const PLAYER_ORDER: MarbleColor[] = ['red', 'green', 'blue', 'orange'];
 
 export class Game {
 
@@ -38,7 +37,6 @@ export class Game {
     async startGame() {
         console.log("🎮 Game started");
         this.dealCards();
-        // Premier broadcast : currentTurn pointe vers le joueur qui va jouer (player1)
         this.broadcastState(this.player1, null, "Game started");
 
         while (!this.gameIsOver()) {
@@ -53,28 +51,69 @@ export class Game {
         this.turn++;
         const player = this.getCurrentPlayer();
 
+        console.log(`🔄 Tour ${this.turn} — ${player.name} (${player.color})`);
+
         if (player.handEmpty()) {
+            console.log(`${player.name} n'a plus de cartes. Nouvelle donne...`);
             this.dealCards();
         }
 
+        this.syncAllMarblesOnBoard();
+
+        // ── Bug 1 fix : le timeout est maintenant annulable ──────────────────
         const move = await this.waitForActionOrTimeout(player);
         const enrichedMove: Action = { ...move, playerColor: player.color };
 
         this.updateMarblePositions(player, enrichedMove);
         this.updateDiscardedCards(enrichedMove);
 
-        // 1️⃣ Broadcast immédiat : "voici l'action qui vient d'être jouée"
+        // 1️⃣ Broadcast de l'action jouée (pour l'animation de carte côté front)
         this.broadcastAction(enrichedMove);
 
-        // 2️⃣ Attendre que les animations soient terminées côté client
-        await this.waitForAnimationsOrTimeout(enrichedMove);
-
-        // 3️⃣ Avancer au prochain joueur et broadcaster le nouvel état
+        // 2️⃣ Broadcast du nouvel état (positions mises à jour → front peut animer le pion)
         this.turn++;
         const nextPlayer = this.getCurrentPlayer();
         this.turn--;
-
         this.broadcastState(nextPlayer, enrichedMove);
+
+        // 3️⃣ Attendre que le front confirme que les animations sont terminées
+        await this.waitForAnimationsOrTimeout(enrichedMove);
+    }
+
+    // ─── Bug 1 fix : timeout annulable ───────────────────────────────────────
+
+    /**
+     * Attend l'action du joueur avec un timeout annulable.
+     * Le timer est clearé dès que le joueur joue, évitant les timeouts fantômes
+     * qui se déclenchaient sur les tours suivants.
+     */
+    private waitForActionOrTimeout(player: Player): Promise<Action> {
+        return new Promise<Action>((resolve) => {
+            let settled = false;
+
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                console.log(`⏰ Timeout — ${player.name} passe son tour.`);
+                resolve({ type: 'pass', from: 0, to: 0, cardPlayed: null, playerColor: player.color });
+            }, TURN_DURATION_SECONDS * 1000);
+
+            player.getPlayerAction().then((action) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer); // ✅ annule le timeout dès que l'IA a joué
+                resolve(action);
+            });
+        });
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private syncAllMarblesOnBoard(): void {
+        const allPositions = this.getAllPlayers().flatMap(p => p.marblePositions);
+        for (const player of this.getAllPlayers()) {
+            player.allMarblesOnBoard = allPositions;
+        }
     }
 
     private broadcastAction(action: Action): void {
@@ -88,17 +127,24 @@ export class Game {
 
     private waitForAnimationsOrTimeout(action: Action): Promise<void> {
         const animDuration = MARBLE_ANIMATION_DURATIONS[action.type] ?? 0;
-        // Délai total = vol de carte + animation du pion + petite marge
-        const fallbackDelay = CARD_LAND_DELAY_MS + animDuration + 200;
+        const fallbackDelay = CARD_LAND_DELAY_MS + animDuration + 500;
 
         return new Promise<void>((resolve) => {
-            const timer = setTimeout(resolve, fallbackDelay);
+            let settled = false;
 
-            // Écoute un acquittement "animationDone" du client
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                console.log(`⏰ Animation fallback timeout (${fallbackDelay}ms)`);
+                resolve();
+            }, fallbackDelay);
+
             const onMessage = (raw: MessageEvent) => {
                 try {
                     const msg = JSON.parse(raw.data as string);
                     if (msg.type === 'animationDone') {
+                        if (settled) return;
+                        settled = true;
                         clearTimeout(timer);
                         this.ws.removeEventListener('message', onMessage);
                         resolve();
@@ -123,39 +169,21 @@ export class Game {
                 if (index !== -1) {
                     player.marblePositions[index] = move.to;
                 } else {
-                    console.warn(`⚠️ ${player.name} essaie de déplacer une bille depuis ${move.from} mais elle n'y est pas.`);
+                    console.warn(`⚠️ ${player.name} essaie de déplacer un pion depuis ${move.from} mais il n'y est pas.`);
                 }
                 break;
             }
             case 'capture':
-                // TODO: renvoyer le pion capturé à la home de son propriétaire
+                // TODO
                 break;
             case 'swap':
-                // TODO: échanger les positions des deux pions
+                // TODO
+                break;
+            case 'pass':
                 break;
         }
     }
 
-    private waitForActionOrTimeout(player: Player): Promise<Action> {
-        const actionPromise = player.getPlayerAction();
-
-        const timeoutPromise = new Promise<Action>((resolve) => {
-            setTimeout(() => {
-                console.log(`⏰ Timeout — ${player.name} passe son tour.`);
-                resolve({ type: 'pass', from: 0, to: 0, cardPlayed: null, playerColor: player.color });
-            }, TURN_DURATION_SECONDS * 1000);
-        });
-
-        return Promise.race([actionPromise, timeoutPromise]);
-    }
-
-    // ─── Broadcast ────────────────────────────────────────────────────────────
-
-    /**
-     * @param currentPlayer  Le joueur dont c'est LE TOUR (celui qui doit jouer)
-     * @param lastAction     L'action qui vient d'être jouée (null en début de partie)
-     * @param message        Message lisible pour le frontend
-     */
     private broadcastState(currentPlayer: Player, lastAction: Action | null, message = 'New turn'): void {
         const state = {
             type: 'gameState',
@@ -170,24 +198,21 @@ export class Game {
                     marblePositions: p.marblePositions,
                 })),
                 currentTurn: {
-                    color: currentPlayer.color, // ✅ couleur du joueur qui DOIT jouer maintenant
+                    color: currentPlayer.color,
                     lastAction: lastAction ?? null,
                 },
                 timer: TURN_DURATION_SECONDS,
-                hand: currentPlayer.cards,   // ✅ main du joueur dont c'est le tour
+                hand: currentPlayer.cards,
                 discardedCards: this.discardedCards,
             }
         };
         this.ws.send(JSON.stringify(state));
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
     private getAllPlayers(): Player[] {
         return [this.player1, this.player2, this.player3, this.player4];
     }
 
-    /** Retourne le joueur dont c'est le tour selon `this.turn`. */
     private getCurrentPlayer(): Player {
         return this.getAllPlayers()[(this.turn - 1) % 4]!;
     }

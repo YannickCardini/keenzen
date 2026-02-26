@@ -29,9 +29,7 @@ export interface CardInfo {
 }
 
 export interface SquareAnimation {
-  /** Classe CSS à appliquer sur le .marble */
   marbleClass: string;
-  /** Classe CSS optionnelle à appliquer sur la .case-path */
   squareClass?: string;
 }
 
@@ -43,7 +41,7 @@ export interface SquareAnimation {
 })
 export class BoardComponent implements OnInit, OnDestroy {
 
-  // ── Config plateau (depuis @keezen/shared) ──────────────────────────────────
+  // ── Config plateau ──────────────────────────────────────────────────────────
   readonly gridSize = GRID_SIZE;
   readonly homes = HOME_POSITIONS;
   readonly arrivals = ARRIVAL_POSITIONS;
@@ -54,77 +52,73 @@ export class BoardComponent implements OnInit, OnDestroy {
   // ── État UI ─────────────────────────────────────────────────────────────────
   squareSize: number = 0;
   squareToDisplay: number[] = SQUARES_TO_DISPLAY;
-
   squareAnimations = signal<Record<number, SquareAnimation>>({});
-
-  /** Pile de défausse : toutes les cartes jouées, la dernière en tête */
   discardPile = signal<CardInfo[]>([]);
-
-  /** Carte en vol (animation d'arrivée sur la pile), null quand pas d'animation */
   flyingCard = signal<CardInfo | null>(null);
-
   debug = true;
 
   // ── Timers internes ─────────────────────────────────────────────────────────
   private animationTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
   private flyingCardTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  // ── Suivi des animations en cours ──────────────────────────────────────────
-  // On compte le nombre d'animations actives pour savoir quand tout est terminé.
-  private pendingAnimations = 0;
+  // ── Bug 3 fix : pipeline d'animation en deux phases ─────────────────────────
+  //
+  // PROBLÈME : quand `actionPlayed` arrive, le DOM reflète encore l'ANCIEN état
+  // (le pion est sur sa case de départ). Le `gameState` mis à jour n'arrive
+  // qu'ensuite. Si on anime immédiatement la case cible, le pion n'y est pas
+  // encore → l'animation ne se voit pas.
+  //
+  // SOLUTION : on découpe en deux phases :
+  //   Phase 1 (sur actionPlayed) → animation de carte uniquement
+  //   Phase 2 (sur gameState)    → animation du pion (il est maintenant au bon endroit)
+  //                              → puis sendAnimationDone
+  //
+  // `pendingMarbleAnimation` stocke l'action entre les deux phases.
+  private pendingMarbleAnimation: Action | null = null;
   private actionPlayedSub: Subscription | null = null;
 
-  // ── Constructor ─────────────────────────────────────────────────────────────
-
   constructor(private gameStateService: GameStateService) {
-    // ── Écoute du nouveau message `actionPlayed` ──────────────────────────
-    // Remplace l'ancien effect() sur data() pour les animations.
-    // Le backend envoie `actionPlayed` AVANT de mettre à jour le gameState,
-    // et attend notre `animationDone` pour continuer.
+
+    // ── Phase 1 : actionPlayed → animation de carte ──────────────────────────
     this.actionPlayedSub = this.gameStateService.actionPlayed$.subscribe((action: Action) => {
-      this.playActionAnimation(action);
+      this.pendingMarbleAnimation = action; // on mémorise pour la phase 2
+
+      if (action.cardPlayed) {
+        const card: CardInfo = {
+          value: action.cardPlayed.value,
+          suit: action.cardPlayed.suit,
+          color: action.playerColor as MarbleColor,
+        };
+        // Lance l'animation de vol de carte uniquement.
+        // La carte va "voler" pendant que le gameState est en route.
+        this.triggerCardAnimation(card);
+      }
+      // Pas de sendAnimationDone ici — on attend la phase 2.
     });
-  }
 
-  // ── Orchestration principale ────────────────────────────────────────────────
+    // ── Phase 2 : gameState → pion au bon endroit → animation du pion ────────
+    effect(() => {
+      const gameData = this.gameStateService.data();
+      if (!gameData) return;
 
-  /**
-   * Point d'entrée unique pour jouer l'animation d'une action reçue.
-   * Une fois toutes les animations terminées, envoie `animationDone` au backend.
-   */
-  private playActionAnimation(action: Action): void {
-    this.pendingAnimations = 0; // reset pour cette action
+      const action = this.pendingMarbleAnimation;
+      if (!action) return;
 
-    if (action.cardPlayed) {
-      const card: CardInfo = {
-        value: action.cardPlayed.value,
-        suit: action.cardPlayed.suit,
-        color: action.playerColor as MarbleColor,
-      };
+      // Consomme l'action en attente pour ne pas la rejouer
+      this.pendingMarbleAnimation = null;
 
-      // 1. Animation du vol de carte
-      this.triggerCardAnimation(card, () => {
-        // 2. Animation du pion, déclenchée après l'atterrissage de la carte
+      // Le DOM va se mettre à jour avec les nouvelles positions via data().
+      // On attend un frame pour laisser Angular re-rendre les pions avant d'animer.
+      requestAnimationFrame(() => {
         this.triggerMarbleAnimation(action, () => {
-          // 3. Tout est terminé → on notifie le backend
           this.gameStateService.sendAnimationDone();
         });
       });
-
-    } else {
-      // Pas de carte jouée (ex: pass, timeout) → marble directement, ou rien
-      this.triggerMarbleAnimation(action, () => {
-        this.gameStateService.sendAnimationDone();
-      });
-    }
+    });
   }
 
   // ── Animations ──────────────────────────────────────────────────────────────
 
-  /**
-   * Déclenche l'animation marble correspondant au type d'action.
-   * @param onComplete  Callback appelé quand l'animation marble est terminée.
-   */
   private triggerMarbleAnimation(
     action: { type: string; from: number; to: number },
     onComplete: () => void
@@ -132,7 +126,6 @@ export class BoardComponent implements OnInit, OnDestroy {
     const type = action.type as ActionType;
     const duration = MARBLE_ANIMATION_DURATIONS[type] ?? 0;
 
-    // Cas sans animation (pass, types inconnus) → on notifie immédiatement
     if (duration === 0) {
       onComplete();
       return;
@@ -148,7 +141,6 @@ export class BoardComponent implements OnInit, OnDestroy {
         break;
 
       case 'capture':
-        // Deux animations en parallèle → on attend que les DEUX soient finies
         this.triggerAnimationParallel([
           { index: action.to, anim: { marbleClass: 'marble-capturing', squareClass: 'square-impact' } },
           { index: action.from, anim: { marbleClass: 'marble-captured-exit' } },
@@ -174,9 +166,6 @@ export class BoardComponent implements OnInit, OnDestroy {
     }
   }
 
-  /**
-   * Déclenche une animation sur une case et appelle `onComplete` à la fin.
-   */
   private triggerAnimation(
     index: number,
     anim: SquareAnimation,
@@ -186,7 +175,7 @@ export class BoardComponent implements OnInit, OnDestroy {
     const existing = this.animationTimeouts.get(index);
     if (existing) clearTimeout(existing);
 
-    // Force le re-trigger CSS si la même classe est déjà présente
+    // Supprime la classe d'abord pour forcer le re-trigger CSS
     this.squareAnimations.update(prev => {
       const next = { ...prev };
       delete next[index];
@@ -210,32 +199,26 @@ export class BoardComponent implements OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Déclenche plusieurs animations en parallèle et appelle `onComplete`
-   * uniquement quand toutes sont terminées.
-   */
   private triggerAnimationParallel(
     targets: Array<{ index: number; anim: SquareAnimation }>,
     duration: number,
     onComplete: () => void
   ): void {
     let remaining = targets.length;
-
     const onEachDone = () => {
       remaining--;
       if (remaining === 0) onComplete();
     };
-
     for (const { index, anim } of targets) {
       this.triggerAnimation(index, anim, duration, onEachDone);
     }
   }
 
   /**
-   * Déclenche l'animation de vol de la carte jouée, puis l'empile sur la pile.
-   * @param onComplete  Appelé quand la carte a atterri sur la pile.
+   * Lance l'animation de vol de carte vers la pile de défausse.
+   * Pas de callback ici : elle est indépendante du pipeline marble/animationDone.
    */
-  private triggerCardAnimation(card: CardInfo, onComplete: () => void): void {
+  private triggerCardAnimation(card: CardInfo): void {
     if (this.flyingCardTimeout) clearTimeout(this.flyingCardTimeout);
 
     this.flyingCard.set(null);
@@ -245,7 +228,6 @@ export class BoardComponent implements OnInit, OnDestroy {
         this.discardPile.update(pile => [card, ...pile]);
         this.flyingCard.set(null);
         this.flyingCardTimeout = null;
-        onComplete();
       }, CARD_LAND_DELAY_MS);
     });
   }
@@ -256,12 +238,10 @@ export class BoardComponent implements OnInit, OnDestroy {
     return this.discardPile()[0] ?? null;
   }
 
-  /** Classes CSS d'animation pour le .marble d'une case */
   getMarbleAnimClass(index: number): string {
     return this.squareAnimations()[index]?.marbleClass ?? '';
   }
 
-  /** Classes CSS d'animation pour la .case-path d'une case */
   getSquareAnimClass(index: number): string {
     return this.squareAnimations()[index]?.squareClass ?? '';
   }
