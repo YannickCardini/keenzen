@@ -71,7 +71,7 @@ export class Player {
     // ── Logique IA ───────────────────────────────────────────────────────────
 
     async calculateAIMove(): Promise<Action> {
-        await sleep(8500); // simule un temps de réflexion
+        await sleep(4500); // simule un temps de réflexion
 
         const ctx = this.buildContext();
 

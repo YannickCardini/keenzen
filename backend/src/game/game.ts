@@ -40,6 +40,9 @@ export class Game {
         this.broadcastState(this.player1, null, "Game started");
 
         while (!this.gameIsOver()) {
+            if (this.player1.handEmpty() && this.player2.handEmpty() && this.player3.handEmpty() && this.player4.handEmpty()) {
+                this.dealCards();
+            }
             await this.playOneTurn();
         }
 
@@ -54,8 +57,9 @@ export class Game {
         console.log(`🔄 Tour ${this.turn} — ${player.name} (${player.color})`);
 
         if (player.handEmpty()) {
-            console.log(`${player.name} n'a plus de cartes. Nouvelle donne...`);
-            this.dealCards();
+            console.log(`${player.name} n'a plus de cartes. Passe son tour...`);
+            this.broadcastState(player, null, `${player.name} passe son tour (main vide)`);
+            return;
         }
 
         this.syncAllMarblesOnBoard();
