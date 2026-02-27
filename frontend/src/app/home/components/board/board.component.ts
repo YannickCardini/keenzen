@@ -20,6 +20,7 @@ import {
   MARBLE_ANIMATION_DURATIONS,
   CARD_LAND_DELAY_MS,
   CARD_FLY_DURATION_MS,
+  GameStateMessage,
 } from '@keezen/shared';
 
 export interface CardInfo {
@@ -55,6 +56,8 @@ export class BoardComponent implements OnInit, OnDestroy {
   squareAnimations = signal<Record<number, SquareAnimation>>({});
   discardPile = signal<CardInfo[]>([]);
   flyingCard = signal<CardInfo | null>(null);
+  displayedGameData = signal<GameStateMessage | null>(null);
+
   debug = true;
 
   // ── Timers internes ─────────────────────────────────────────────────────────
@@ -82,6 +85,7 @@ export class BoardComponent implements OnInit, OnDestroy {
     this.actionPlayedSub = this.gameStateService.actionPlayed$.subscribe((action: Action) => {
       this.pendingMarbleAnimation = action;
       this.gameStateReadyForMarble = false; // reset pour cette action
+      this.flyCardDone = false;
 
       if (action.cardPlayed) {
         const card: CardInfo = {
@@ -106,12 +110,20 @@ export class BoardComponent implements OnInit, OnDestroy {
     // ── Phase 2 : gameState reçu → le DOM peut être mis à jour ───────────────
     effect(() => {
       const gameData = this.gameStateService.data();
-      if (!gameData) return;
+      if (!gameData) {
+        this.displayedGameData.set(null);
+        return;
+      }
 
-      // Marque le gameState comme disponible pour la phase marble.
+      // Premier rendu (pas d'animation en cours) → on affiche directement
+      if (!this.pendingMarbleAnimation) {
+        this.displayedGameData.set(gameData);
+        return;
+      }
+
+      // Animation en cours → on mémorise mais on n'affiche pas encore.
+      // displayedGameData sera mis à jour dans tryTriggerMarblePhase().
       this.gameStateReadyForMarble = true;
-
-      // Si le fly card est déjà terminé (ou pas de carte), on lance le marble.
       this.tryTriggerMarblePhase();
     });
   }
@@ -145,6 +157,8 @@ export class BoardComponent implements OnInit, OnDestroy {
     this.pendingMarbleAnimation = null;
     this.flyCardDone = false;
     this.gameStateReadyForMarble = false;
+
+    this.displayedGameData.set(this.gameStateService.data());
 
     // Le DOM a déjà été mis à jour par Angular (gameState reçu).
     // On attend un frame pour s'assurer que le re-rendu est terminé.
@@ -367,15 +381,15 @@ export class BoardComponent implements OnInit, OnDestroy {
   }
 
   getPlayer(color: MarbleColor): Player | undefined {
-    return this.gameStateService.data()?.gameState.players.find(p => p.color === color);
+    return this.displayedGameData()?.gameState.players.find(p => p.color === color);
   }
 
   isCurrentTurn(color: MarbleColor): boolean {
-    return this.gameStateService.data()?.gameState.currentTurn.color === color;
+    return this.displayedGameData()?.gameState.currentTurn.color === color;
   }
 
   getMarbleOnSquare(index: number): MarbleColor | null {
-    const gameData = this.gameStateService.data();
+    const gameData = this.displayedGameData();
     if (!gameData || !this.gameStateService.isConnected()) return null;
 
     const player = gameData.gameState.players.find(p =>
