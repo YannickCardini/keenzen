@@ -56,6 +56,8 @@ export class BoardComponent implements OnInit, OnDestroy {
   squareAnimations = signal<Record<number, SquareAnimation>>({});
   discardPile = signal<CardInfo[]>([]);
   flyingCard = signal<CardInfo | null>(null);
+  /** Cartes en vol simultanées lors d'un discard (plusieurs cartes) */
+  flyingCards = signal<Array<CardInfo & { flyIndex: number }>>([]);
   displayedGameData = signal<GameStateMessage | null>(null);
 
   debug = true;
@@ -79,14 +81,19 @@ export class BoardComponent implements OnInit, OnDestroy {
 
   private async runActionSequence(action: Action): Promise<void> {
 
-    // Étape 1 : fly card (si applicable)
-    if (action.cardPlayed?.length && action.type !== 'discard') {
-      const card: CardInfo = {
-        value: action.cardPlayed[0].value,
-        suit: action.cardPlayed[0].suit,
-        color: action.playerColor as MarbleColor,
-      };
-      await this.flyCard(card);
+    // Étape 1 : fly card(s)
+    if (action.cardPlayed?.length) {
+      if (action.type === 'discard') {
+        // Toutes les cartes de la main s'envolent en séquence
+        await this.flyDiscardCards(action.cardPlayed, action.playerColor as MarbleColor);
+      } else {
+        const card: CardInfo = {
+          value: action.cardPlayed[0].value,
+          suit: action.cardPlayed[0].suit,
+          color: action.playerColor as MarbleColor,
+        };
+        await this.flyCard(card);
+      }
     }
 
     // Étape 2 : animation du marble
@@ -94,6 +101,44 @@ export class BoardComponent implements OnInit, OnDestroy {
 
     // Étape 3 : signaler la fin
     this.gameStateService.sendAnimationDone();
+  }
+
+  /** Vol en séquence de plusieurs cartes (défausse totale). */
+  private flyDiscardCards(cards: Array<{ value: string; suit: string }>, color: MarbleColor): Promise<void> {
+    const STAGGER_MS = 220;   // délai entre chaque carte
+    const FLY_MS = CARD_FLY_DURATION_MS;
+
+    return new Promise(resolve => {
+      // Lancer les cartes une à une avec un stagger
+      cards.forEach((c, i) => {
+        setTimeout(() => {
+          const cardInfo: CardInfo & { flyIndex: number } = {
+            value: c.value,
+            suit: c.suit,
+            color,
+            flyIndex: i,
+          };
+
+          // Ajouter la carte au tableau des cartes en vol
+          this.flyingCards.update(prev => [...prev, cardInfo]);
+
+          // Au moment de l'atterrissage, alimenter la pile et retirer du vol
+          setTimeout(() => {
+            const ci: CardInfo = { value: c.value, suit: c.suit, color };
+            this.discardPile.update(pile => [ci, ...pile]);
+            this.flyingCards.update(prev => prev.filter(fc => fc.flyIndex !== i));
+
+            // Résoudre la promesse quand la dernière carte est posée
+            if (i === cards.length - 1) {
+              resolve();
+            }
+          }, FLY_MS);
+        }, i * STAGGER_MS);
+      });
+
+      // Sécurité : résoudre si cards est vide
+      if (cards.length === 0) resolve();
+    });
   }
 
   private flyCard(card: CardInfo): Promise<void> {

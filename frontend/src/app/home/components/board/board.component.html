@@ -75,5 +75,14 @@
     </app-tock-card>
   </div>
   }
+
+  <!-- Cartes en vol multiples lors d'un discard -->
+  @for (fc of flyingCards(); track fc.flyIndex) {
+  <div class="flying-card flying-card--discard" [ngClass]="'player-' + fc.color"
+    [style.--fly-stagger-index]="fc.flyIndex" [style.z-index]="50 + fc.flyIndex">
+    <app-tock-card [value]="fc.value" [suit]="fc.suit">
+    </app-tock-card>
+  </div>
+  }
 </div>
 </div>
