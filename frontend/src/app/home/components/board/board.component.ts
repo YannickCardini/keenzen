@@ -21,6 +21,7 @@ import {
   CARD_LAND_DELAY_MS,
   CARD_FLY_DURATION_MS,
   GameStateMessage,
+  MAIN_PATH,
 } from '@keezen/shared';
 
 export interface CardInfo {
@@ -80,6 +81,7 @@ export class BoardComponent implements OnInit, OnDestroy {
   }
 
   private async runActionSequence(action: Action): Promise<void> {
+    const turnSnapshot = this.gameStateService.newTurn.getValue();
 
     // Étape 1 : fly card(s)
     if (action.cardPlayed?.length) {
@@ -100,7 +102,10 @@ export class BoardComponent implements OnInit, OnDestroy {
     await this.animateMarble(action);
 
     // Étape 3 : signaler la fin
-    this.gameStateService.sendAnimationDone();
+    const currentTurn = this.gameStateService.newTurn.getValue();
+    if (currentTurn === turnSnapshot) {
+      this.gameStateService.sendAnimationDone();
+    }
   }
 
   /** Vol en séquence de plusieurs cartes (défausse totale). */
@@ -152,68 +157,98 @@ export class BoardComponent implements OnInit, OnDestroy {
     });
   }
 
-  private animateMarble(action: Action): Promise<void> {
-    return new Promise(resolve => {
-      const type = action.type as ActionType;
-      const duration = MARBLE_ANIMATION_DURATIONS[type] ?? 0;
+  private async animateMarble(action: Action): Promise<void> {
+    const type = action.type as ActionType;
+    const duration = MARBLE_ANIMATION_DURATIONS[type] ?? 0;
 
-      if (duration === 0) {
-        resolve();
-        return;
-      }
+    if (duration === 0) return;
 
-      const applyAndWait = (index: number, anim: SquareAnimation) => {
-        return new Promise<void>(res => {
-          this.squareAnimations.update(prev => ({ ...prev, [index]: anim }));
+    const applyAndWait = (index: number, anim: SquareAnimation) => {
+      return new Promise<void>(res => {
+        this.squareAnimations.update(prev => ({ ...prev, [index]: anim }));
 
-          setTimeout(() => {
-            this.squareAnimations.update(prev => {
-              const next = { ...prev };
-              delete next[index];
-              return next;
-            });
-            res();
-          }, duration);
-        });
-      };
+        setTimeout(() => {
+          this.squareAnimations.update(prev => {
+            const next = { ...prev };
+            delete next[index];
+            return next;
+          });
+          res();
+        }, duration);
+      });
+    };
 
-      this.updateMarblePosition(action);
 
-      switch (type) {
-        case 'enter':
-          // On change 'marble-enter' par 'marble-entering'
-          applyAndWait(action.to, { marbleClass: 'marble-entering' }).then(resolve);
-          break;
+    switch (type) {
+      case 'enter':
+        this.updateMarblePosition(action); // On place le pion sur le 'start'
+        await applyAndWait(action.to, { marbleClass: 'marble-entering' });
+        break;
 
-        case 'move':
-          // On change 'marble-move' par 'marble-moving'
-          applyAndWait(action.to, { marbleClass: 'marble-moving' }).then(resolve);
-          break;
+      case 'move':
+        const steps = this.calculateActionsMove(action);
+        // On utilise une boucle for...of pour attendre chaque étape
+        for (const step of steps) {
+          // 1. On déplace la donnée du pion d'une seule case
+          this.updateMarblePosition(step);
+          // 2. On attend que l'animation de cette case se termine
+          await applyAndWait(step.to, { marbleClass: 'marble-moving' });
+        }
+        break;
 
-        case 'capture':
-          Promise.all([
-            applyAndWait(action.from, { marbleClass: 'marble-capturing' }),
-            applyAndWait(action.to, { marbleClass: 'marble-captured-exit', squareClass: 'square-impact' }),
-          ]).then(() => resolve());
-          break;
+      case 'capture':
+        // Pour une capture, on peut mettre à jour avant d'animer l'impact
+        this.updateMarblePosition(action);
+        await Promise.all([
+          applyAndWait(action.from, { marbleClass: 'marble-capturing' }),
+          applyAndWait(action.to, { marbleClass: 'marble-captured-exit', squareClass: 'square-impact' }),
+        ]);
+        break;
 
-        case 'swap':
-          Promise.all([
-            applyAndWait(action.from, { marbleClass: 'marble-swapping' }),
-            applyAndWait(action.to, { marbleClass: 'marble-swapping' }),
-          ]).then(() => resolve());
-          break;
+      case 'promote':
+        this.updateMarblePosition(action);
+        await applyAndWait(action.to, { marbleClass: 'marble-promoting', squareClass: 'square-promoting' });
+        break;
 
-        case 'promote':
-          applyAndWait(action.to, { marbleClass: 'marble-promoting', squareClass: 'square-promoting' }).then(resolve);
-          break;
-
-        default:
-          resolve();
-      }
-    });
+      default:
+        this.updateMarblePosition(action);
+    }
   }
 
+  private calculateActionsMove(action: Action): Action[] {
+    const calculatePath = (from: number, to: number): number[] => {
+      const startIndex = MAIN_PATH.indexOf(from);
+      const endIndex = MAIN_PATH.indexOf(to);
+
+      if (startIndex === -1 || endIndex === -1) return [];
+
+      const path: number[] = [];
+      let currentIndex = startIndex;
+
+      while (currentIndex !== endIndex) {
+        path.push(MAIN_PATH[currentIndex]);
+        currentIndex = (currentIndex + 1) % MAIN_PATH.length;
+      }
+      path.push(MAIN_PATH[endIndex]);
+
+      return path;
+    };
+
+    const path = calculatePath(action.from, action.to);
+    const actions: Action[] = [];
+
+    // On boucle pour créer une action par segment (ex: 15->6, puis 6->9)
+    for (let i = 0; i < path.length - 1; i++) {
+      actions.push({
+        ...action,             // On copie les infos (playerColor, cardPlayed)
+        from: path[i],        // Case de départ du segment
+        to: path[i + 1],      // Case d'arrivée du segment
+        type: 'move'          // On force le type en 'move'
+      });
+    }
+
+    return actions;
+  }
   private updateMarblePosition(action: Action): void {
     this.displayedGameData.update(current => {
       if (!current) return current;

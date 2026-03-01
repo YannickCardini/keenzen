@@ -72,6 +72,8 @@ export class Game {
 
         // 5️⃣ Attendre confirmation des animations (ou timeout fallback)
         await this.waitForAnimationsOrTimeout(enrichedMove);
+        let date = new Date();
+        console.log(date.getSeconds(), ':', date.getMilliseconds(), ' waitForAnimationsOrTimeout resolved ')
     }
 
     // ─── Bug 1 fix : timeout annulable ───────────────────────────────────────
@@ -121,7 +123,7 @@ export class Game {
 
     private waitForAnimationsOrTimeout(action: Action): Promise<void> {
         const animDuration = MARBLE_ANIMATION_DURATIONS[action.type] ?? 0;
-        const fallbackDelay = CARD_LAND_DELAY_MS + animDuration + 500;
+        const fallbackDelay = CARD_LAND_DELAY_MS + animDuration + 1000;
 
         return new Promise<void>((resolve) => {
             let settled = false;
@@ -138,10 +140,13 @@ export class Game {
                     const msg = JSON.parse(raw.data as string);
                     if (msg.type === 'animationDone') {
                         if (settled) return;
+                        const date = new Date();
+                        console.log(date.getSeconds(), ':', date.getMilliseconds(), "Animation Done received")
                         settled = true;
                         clearTimeout(timer);
                         this.ws.removeEventListener('message', onMessage);
-                        resolve();
+                        +                   // Laisser le temps au front de finir le rendu avant le prochain broadcast
+                            +                   setTimeout(resolve, animDuration);
                     }
                 } catch { /* ignore */ }
             };
