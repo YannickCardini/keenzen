@@ -16,7 +16,10 @@ export class Game {
     player2: Player;
     player3: Player;
     player4: Player;
-    turn: number = 0;
+    turn: number = 0;        // Compteur de tours total
+    round: number = 0;        // Compteur de manches
+    firstPlayerOfRound: number = 0; // Index (0-3) du premier joueur de la manche courante
+    currentPlayerIndex: number = 0; // Index du joueur qui doit jouer maintenant
     deck: Deck;
     ws: WebSocket;
     discardedCards: Card[] = [];
@@ -35,24 +38,45 @@ export class Game {
 
     async startGame() {
         console.log("🎮 Game started");
+
+        // Première manche : commence par le joueur 1 (index 0)
+        this.firstPlayerOfRound = 0;
+        this.currentPlayerIndex = 0;
         this.dealCards();
 
         while (!this.gameIsOver()) {
-            if (this.player1.handEmpty() && this.player2.handEmpty() && this.player3.handEmpty() && this.player4.handEmpty()) {
-                this.dealCards();
+            // Vérifier si on doit commencer une nouvelle manche
+            if (this.allHandsEmpty()) {
+                this.startNewRound();
+                // Ne pas jouer de tour immédiatement, on laisse la boucle recommencer
+                continue;
             }
-            await this.playOneTurn();
-        }
 
-        console.log("🏆 Game over!");
-        this.broadcastState(this.getCurrentPlayer(), "Game over");
+            await this.playOneTurn();
+
+            // Passer au joueur suivant pour le prochain tour
+            this.currentPlayerIndex = (this.currentPlayerIndex + 1) % 4;
+            this.turn++;
+        }
+    }
+
+    private startNewRound(): void {
+        // Décaler le premier joueur pour la prochaine manche
+        this.firstPlayerOfRound = (this.firstPlayerOfRound + 1) % 4;
+
+        // Le premier joueur de la nouvelle manche est celui qui commence
+        this.currentPlayerIndex = this.firstPlayerOfRound;
+
+        // Distribuer les nouvelles cartes
+        this.dealCards();
+
+        console.log(`📦 Nouvelle manche ${this.round} - Premier joueur: ${this.getAllPlayers()[this.firstPlayerOfRound]!.name}`);
     }
 
     private async playOneTurn() {
-        this.turn++;
-        const player = this.getCurrentPlayer();
+        const player = this.getAllPlayers()[this.currentPlayerIndex]!;
 
-        console.log(`🔄 Tour ${this.turn} — ${player.name} (${player.color})`);
+        console.log(`🔄 Tour ${this.turn} (Manche ${this.round}) — ${player.name} (${player.color})`);
 
         this.syncAllMarblesOnBoard();
 
@@ -72,10 +96,7 @@ export class Game {
 
         // 5️⃣ Attendre confirmation des animations (ou timeout fallback)
         await this.waitForAnimationsOrTimeout(enrichedMove);
-        let date = new Date();
-        console.log(date.getSeconds(), ':', date.getMilliseconds(), ' waitForAnimationsOrTimeout resolved ')
     }
-
     // ─── Bug 1 fix : timeout annulable ───────────────────────────────────────
 
     /**
@@ -140,8 +161,6 @@ export class Game {
                     const msg = JSON.parse(raw.data as string);
                     if (msg.type === 'animationDone') {
                         if (settled) return;
-                        const date = new Date();
-                        console.log(date.getSeconds(), ':', date.getMilliseconds(), "Animation Done received")
                         settled = true;
                         clearTimeout(timer);
                         this.ws.removeEventListener('message', onMessage);
@@ -210,19 +229,24 @@ export class Game {
         return [this.player1, this.player2, this.player3, this.player4];
     }
 
-    private getCurrentPlayer(): Player {
-        return this.getAllPlayers()[(this.turn - 1) % 4]!;
+    private allHandsEmpty(): boolean {
+        return this.getAllPlayers().every(p => p.handEmpty());
     }
 
+
     dealCards(): void {
+        this.round++; // Incrémenter le compteur de manche
+
         if (this.deck.isEmpty()) this.deck.resetDeck();
         this.deck.shuffle();
+
         this.player1.cards = this.deck.drawCards(CARDS_PER_HAND);
         this.player2.cards = this.deck.drawCards(CARDS_PER_HAND);
         this.player3.cards = this.deck.drawCards(CARDS_PER_HAND);
         this.player4.cards = this.deck.drawCards(CARDS_PER_HAND);
-    }
 
+        console.log(`🃏 Distribution - Manche ${this.round}`);
+    }
     gameIsOver(): boolean {
         return this.getAllPlayers().some(p => hasWon(p.marblePositions, p.color));
     }
