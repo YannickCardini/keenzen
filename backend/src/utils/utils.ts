@@ -125,11 +125,22 @@ function buildMoveAction(
     const to = getPositionAfterMove(from, steps);
     if (to === null) return null;
 
-    // Ne peut pas atterrir sur un de ses propres pions
+    // You cannot land on your own marble
     if (ownMarbles.includes(to)) return null;
 
-    // Chemin bloqué par une case safe adverse occupée
+    // Path must be clear of safe spaces
     if (!pathIsClear(from, steps, playerColor, allMarbles)) return null;
+
+    // 🎯 Detect if the target space is occupied by an enemy
+    if (allMarbles.includes(to)) {
+        return {
+            type: 'capture',
+            from,
+            to,
+            cardPlayed: [card],
+            playerColor,
+        };
+    }
 
     return {
         type: 'move',

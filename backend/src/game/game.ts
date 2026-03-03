@@ -191,9 +191,31 @@ export class Game {
                 }
                 break;
             }
-            case 'capture':
-                // TODO
+            case 'capture': {
+                // 1. Move the attacker
+                const index = player.marblePositions.indexOf(move.from);
+                if (index !== -1) {
+                    player.marblePositions[index] = move.to;
+                }
+
+                // 2. Find the victim and send them back to their home
+                for (const victim of this.getAllPlayers()) {
+                    if (victim === player) continue;
+
+                    const victimMarbleIndex = victim.marblePositions.indexOf(move.to);
+                    if (victimMarbleIndex !== -1) {
+                        // Find an empty home position for the victim using getHomePositions
+                        const homePositions = getHomePositions(victim.color);
+                        const emptyHome = homePositions.find(pos => !victim.marblePositions.includes(pos));
+
+                        if (emptyHome !== undefined) {
+                            victim.marblePositions[victimMarbleIndex] = emptyHome;
+                            console.log(`💀 ${player.name} a capturé un pion de ${victim.name}! Retour à la base (${emptyHome}).`);
+                        }
+                    }
+                }
                 break;
+            }
             case 'swap':
                 // TODO
                 break;

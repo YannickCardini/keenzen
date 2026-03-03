@@ -71,7 +71,20 @@ export class Player {
 
         const ctx = this.buildContext();
 
-        // Essaie les cartes par ordre de priorité
+        // 🔥 PASS 1: Prioritize capturing an enemy
+        for (const targetValue of AI_CARD_PRIORITY) {
+            const card = this.cards.find(c => c.value === targetValue);
+            if (!card) continue;
+
+            const action = findLegalMoveForCard(card, ctx);
+            if (action && action.type === 'capture') {
+                console.log(`💥 ${this.name} joue ${card.value}${card.suit} → CAPTURE [${action.from} → ${action.to}]`);
+                this.removeCardFromHand(card);
+                return action;
+            }
+        }
+
+        // 🚶‍♂️ PASS 2: Normal moves (Enter, Move)
         for (const targetValue of AI_CARD_PRIORITY) {
             const card = this.cards.find(c => c.value === targetValue);
             if (!card) continue;
