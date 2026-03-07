@@ -29,7 +29,7 @@ import {
 const AI_CARD_PRIORITY: Card['value'][] = [
     'K', 'A',  // entrée en jeu en premier
     'Q',        // grands déplacements
-    '10', '9', '8', '6', '5', '3', '2',
+    '10', '9', '8', '7', '6', '5', '4', '3', '2',
     // J, 7, 4 : non gérés → seront passés
 ];
 
@@ -68,18 +68,18 @@ export class Player {
             return this.passAction();
         }
 
-        await sleep(3500); // simule un temps de réflexion
+        await sleep(500); // simule un temps de réflexion
 
         const ctx = this.buildContext();
 
-        // 🔥 PASS 1: Prioritize capturing an enemy
+        // 🔥 PASS 1: Prioritize promote and capturing an enemy
         for (const targetValue of AI_CARD_PRIORITY) {
             const card = this.cards.find(c => c.value === targetValue);
             if (!card) continue;
 
             const action = findLegalMoveForCard(card, ctx);
-            if (action && action.type === 'capture') {
-                console.log(`💥 ${this.name} joue ${card.value}${card.suit} → CAPTURE [${action.from} → ${action.to}]`);
+            if (action && (action.type === 'capture' || action.type === 'promote')) {
+                console.log(`💥 ${this.name} joue ${card.value}${card.suit} → [${action.from} → ${action.to}]`);
                 this.removeCardFromHand(card);
                 return action;
             }

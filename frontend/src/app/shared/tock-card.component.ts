@@ -2,7 +2,6 @@ import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export type CardSuit = '♥' | '♦' | '♠' | '♣';
-export type PlayerColor = 'red' | 'green' | 'blue' | 'orange';
 
 @Component({
   selector: 'app-tock-card',

@@ -182,15 +182,8 @@ export class Game {
     private updateMarblePositions(player: Player, move: Action): void {
         switch (move.type) {
             case 'move':
-            case 'enter': {
-                const index = player.marblePositions.indexOf(move.from);
-                if (index !== -1) {
-                    player.marblePositions[index] = move.to;
-                } else {
-                    console.warn(`⚠️ ${player.name} essaie de déplacer un pion depuis ${move.from} mais il n'y est pas.`);
-                }
-                break;
-            }
+            case 'enter':
+            case 'promote':
             case 'capture': {
                 // 1. Move the attacker
                 const index = player.marblePositions.indexOf(move.from);
@@ -216,6 +209,7 @@ export class Game {
                 }
                 break;
             }
+
             case 'swap':
                 // TODO
                 break;

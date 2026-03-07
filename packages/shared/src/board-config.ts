@@ -44,9 +44,9 @@ export const MAIN_PATH: number[] = [
 // Positions initiales des 4 pions d'un joueur, avant d'entrer en jeu.
 
 export const HOME_POSITIONS: Record<MarbleColor, number[]> = {
-  red:    [3, 18, 33, 48],
-  green:  [13, 28, 43, 58],
-  blue:   [178, 193, 208, 223],
+  red: [3, 18, 33, 48],
+  green: [13, 28, 43, 58],
+  blue: [178, 193, 208, 223],
   orange: [168, 183, 198, 213],
 };
 
@@ -54,9 +54,9 @@ export const HOME_POSITIONS: Record<MarbleColor, number[]> = {
 // Case sur laquelle un pion arrive quand il entre en jeu (carte A ou K).
 
 export const START_POSITIONS: Record<MarbleColor, number> = {
-  red:    9,
-  green:  135,
-  blue:   217,
+  red: 9,
+  green: 135,
+  blue: 217,
   orange: 91,
 };
 
@@ -65,18 +65,18 @@ export const START_POSITIONS: Record<MarbleColor, number> = {
 // L'ordre des cases correspond à l'ordre d'entrée dans la zone.
 
 export const ARRIVAL_POSITIONS: Record<MarbleColor, number[]> = {
-  red:    [83, 68, 53, 38],
-  green:  [115, 116, 117, 118],
-  blue:   [143, 158, 173, 188],
-  orange: [111, 110, 109, 108],
+  red: [38, 53, 68, 83],
+  green: [118, 117, 116, 115],
+  blue: [188, 173, 158, 143],
+  orange: [108, 109, 110, 111],
 };
 
 // ── Cases des infos joueurs (player info panel) ───────────────────────────────
 // Cases de la grille utilisées pour afficher les panneaux joueur dans le HTML.
 
 export const PLAYER_INFO_STARTS: Record<number, MarbleColor> = {
-  61:  'red',
-  71:  'green',
+  61: 'red',
+  71: 'green',
   151: 'orange',
   161: 'blue',
 };

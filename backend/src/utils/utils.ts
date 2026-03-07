@@ -3,6 +3,7 @@ import {
     MAIN_PATH,
     HOME_POSITIONS,
     START_POSITIONS,
+    ARRIVAL_POSITIONS,
 } from '@keezen/shared';
 import type { Action, Card, MarbleColor } from "@keezen/shared";
 
@@ -13,8 +14,10 @@ import type { Action, Card, MarbleColor } from "@keezen/shared";
 const CARD_MOVE_DISTANCE: Partial<Record<string, number>> = {
     '2': 2,
     '3': 3,
+    '4': 4,
     '5': 5,
     '6': 6,
+    '7': 7,
     '8': 8,
     '9': 9,
     '10': 10,
@@ -77,10 +80,6 @@ export function getLegalAction(
             return null;
         }
 
-        console.log('HOMEPOSITIONS:', homePositions);
-        console.log('startPos:', startPos);
-        console.log('ownMarbles:', ownMarbles);
-
         return {
             type: 'enter',
             from: marblePosition,
@@ -125,6 +124,19 @@ function buildMoveAction(
     const to = getPositionAfterMove(from, steps);
     if (to === null) return null;
 
+    if (startPositionBtwFromAndTo(from, to, playerColor)) {
+        const arrivalCase = getArrivelCaseIfCanPromote(playerColor, allMarbles, from, steps);
+        if (arrivalCase != null) {
+            return {
+                'type': 'promote',
+                'from': from,
+                'to': arrivalCase,
+                'cardPlayed': [card],
+                'playerColor': playerColor,
+            };
+        }
+    }
+
     // You cannot land on your own marble
     if (ownMarbles.includes(to)) return null;
 
@@ -151,6 +163,21 @@ function buildMoveAction(
     };
 }
 
+function startPositionBtwFromAndTo(from: number, to: number, playerColor: MarbleColor) {
+    const startPosition = START_POSITIONS[playerColor];
+    if (startPosition === from)
+        return false;
+    let index = MAIN_PATH.indexOf(from);
+    while (MAIN_PATH[index] !== to) {
+        if (MAIN_PATH[index] === startPosition)
+            return true;
+        index++;
+        if (index >= MAIN_PATH.length)
+            index = 0;
+    }
+    return false;
+}
+
 function pathIsClear(
     from: number,
     steps: number,
@@ -173,7 +200,6 @@ function pathIsClear(
 
         if (pos === undefined) return false;
 
-        // Can't overpass your start position
         if (pos === ownStartPos) return false;
 
         if (
@@ -186,6 +212,26 @@ function pathIsClear(
     }
 
     return true;
+}
+
+function getArrivelCaseIfCanPromote(playerColor: MarbleColor, allMarbles: number[], from: number, steps: number): number | null {
+    let arrivalPositions = [...ARRIVAL_POSITIONS[playerColor]];
+    const startPosition = START_POSITIONS[playerColor];
+    for (let marble of allMarbles) {
+        // On garde uniquement les positions qui ne sont pas égales à la bille actuelle
+        arrivalPositions = arrivalPositions.filter(pos => pos !== marble);
+    }
+
+    let stepsRequiredToPromote = arrivalPositions.length - 1;
+    let indexOfFrom = MAIN_PATH.indexOf(from);
+    while (MAIN_PATH[indexOfFrom] !== startPosition) {
+        stepsRequiredToPromote++;
+        indexOfFrom++;
+        if (indexOfFrom >= MAIN_PATH.length)
+            indexOfFrom = 0;
+    }
+    return stepsRequiredToPromote === steps ? arrivalPositions.at(-1) || null : null;
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
