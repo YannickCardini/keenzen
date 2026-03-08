@@ -34,7 +34,6 @@ export function getPositionAfterMove(fromPosition: number, steps: number): numbe
 
     let targetIndex = currentIndex + steps;
     if (targetIndex >= MAIN_PATH.length) targetIndex = targetIndex % MAIN_PATH.length;
-    console.log("MAIN_PATH, targerIndex: ", targetIndex, MAIN_PATH[targetIndex])
     return MAIN_PATH[targetIndex] ?? null;
 }
 

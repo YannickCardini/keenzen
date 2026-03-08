@@ -1,0 +1,66 @@
+import type { Action, Card } from '@keezen/shared';
+import { findLegalMoveForCard, sleep, type LegalMoveContext } from '../utils/utils.js';
+import type { PlayerStrategy } from './player-strategy.js';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Priorité des cartes pour l'IA
+//
+//  1. K/A  → entrer un pion en jeu est toujours prioritaire
+//  2. Q    → avance de 12, très efficace
+//  3. 10 … → grands déplacements en premier
+//
+// Cartes non gérées pour l'instant (J : swap, 7 : split, 4 : recul) →
+// getLegalAction retourne null pour leurs comportements spéciaux, donc l'IA
+// les passera naturellement si aucun coup standard n'est trouvable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AI_CARD_PRIORITY: Card['value'][] = [
+    'K', 'A',
+    'Q',
+    '10', '9', '8', '7', '6', '5', '4', '3', '2',
+];
+
+export class AiStrategy implements PlayerStrategy {
+
+    async getAction(ctx: LegalMoveContext, hand: Card[]): Promise<Action> {
+        if (hand.length === 0) {
+            return { type: 'pass', from: 0, to: 0, cardPlayed: [], playerColor: ctx.playerColor };
+        }
+
+        await sleep(500);
+
+        // 🔥 Pass 1 : priorité aux captures et promotions
+        for (const targetValue of AI_CARD_PRIORITY) {
+            const card = hand.find(c => c.value === targetValue);
+            if (!card) continue;
+
+            const action = findLegalMoveForCard(card, ctx);
+            if (action && (action.type === 'capture' || action.type === 'promote')) {
+                console.log(`💥 IA joue ${card.value}${card.suit} → ${action.type} [${action.from} → ${action.to}]`);
+                return action;
+            }
+        }
+
+        // 🚶 Pass 2 : coups normaux (enter, move)
+        for (const targetValue of AI_CARD_PRIORITY) {
+            const card = hand.find(c => c.value === targetValue);
+            if (!card) continue;
+
+            const action = findLegalMoveForCard(card, ctx);
+            if (action) {
+                console.log(`IA joue ${card.value}${card.suit} → ${action.type} [${action.from} → ${action.to}]`);
+                return action;
+            }
+        }
+
+        // Aucun coup légal : défausse toute la main
+        console.log(`IA ne peut jouer aucune carte → défausse`);
+        return {
+            type: 'discard',
+            from: 0,
+            to: 0,
+            cardPlayed: [...hand],
+            playerColor: ctx.playerColor,
+        };
+    }
+}
