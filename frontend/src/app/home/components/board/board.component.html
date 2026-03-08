@@ -77,7 +77,11 @@
 
   <!-- Carte en vol : part du coin du joueur et se pose sur la pile -->
   @if (flyingCard(); as fc) {
-  <div class="flying-card" [ngClass]="['player-' + fc.color, fc.fromHand ? 'flying-card--from-hand' : '']">
+  <div class="flying-card"
+    [style.--fly-start-x]="(fc.startDx ?? 0) + 'px'"
+    [style.--fly-start-y]="(fc.startDy ?? 0) + 'px'"
+    [style.--fly-start-angle]="(fc.startAngle ?? -5) + 'deg'"
+    [ngClass]="['player-' + fc.color, fc.fromHand ? 'flying-card--from-hand' : '']">
     <app-tock-card [value]="fc.value" [suit]="fc.suit">
     </app-tock-card>
   </div>

@@ -39,6 +39,9 @@ export class GameStateService {
   selectedCard = signal<Card | null>(null);
   selectedMarblePosition = signal<number | null>(null);
 
+  /** Position de départ de la carte jouée (pour l'animation depuis la main). */
+  playingCardStart = signal<{ dx: number; dy: number; angle: number } | null>(null);
+
   /** Vrai quand une action complète peut être envoyée au serveur. */
   canPlay = computed(() =>
     this.isMyTurn() &&

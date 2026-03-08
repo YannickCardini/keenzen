@@ -29,6 +29,10 @@ export interface CardInfo {
   suit: string;
   color: MarbleColor;
   fromHand?: boolean;
+  /** Pixel offset from the flying card's rest position to the hand card center (for fromHand animation). */
+  startDx?: number;
+  startDy?: number;
+  startAngle?: number;
 }
 
 export interface SquareAnimation {
@@ -151,6 +155,13 @@ export class BoardComponent implements OnInit, OnDestroy {
   }
 
   private flyCard(card: CardInfo): Promise<void> {
+    if (card.fromHand) {
+      const start = this.gameStateService.playingCardStart();
+      if (start) {
+        card = { ...card, startDx: start.dx, startDy: start.dy, startAngle: start.angle };
+        this.gameStateService.playingCardStart.set(null);
+      }
+    }
     return new Promise(resolve => {
       this.flyingCard.set(card);
       setTimeout(() => {

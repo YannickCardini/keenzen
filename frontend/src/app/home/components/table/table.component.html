@@ -25,6 +25,7 @@
         <button
           class="tock-card-btn playable-card"
           [class.selected]="selectedCardIndex() === i"
+          [class.card-flying-away]="flyingCardIndex() === i"
           [class.is-red]="card.suit === '♥' || card.suit === '♦'"
           [style]="getCardStyle(i, getPlayerHand().length)"
           (click)="onCardSelected(i)">

@@ -5,11 +5,20 @@ import {
   ChangeDetectionStrategy,
   signal,
   computed,
+  effect,
   OnInit,
   OnDestroy
 } from '@angular/core';
 import { TockCardComponent } from 'src/app/shared/tock-card.component';
 import type { Card } from '@keezen/shared';
+
+enum TURN_PHASE {
+  DISCARD = "No playable moves",
+  CARD = "Choose a card",
+  MARBLE = "Choose a Marble",
+  WAIT = "Wait for your turn",
+  CONFIRM = "Confirm your move",
+}
 
 @Component({
   selector: 'app-table',
@@ -18,8 +27,8 @@ import type { Card } from '@keezen/shared';
   changeDetection: ChangeDetectionStrategy.OnPush,
   standalone: true,
   imports: [CommonModule, TockCardComponent]
-})
-export class TableComponent implements OnInit, OnDestroy {
+}) export class TableComponent implements OnInit, OnDestroy {
+
 
   /** Circonférence du cercle SVG (rayon = 27.5) */
   readonly timerCircumference = 2 * Math.PI * 27.5; // ≈ 172.79
@@ -27,10 +36,10 @@ export class TableComponent implements OnInit, OnDestroy {
   timerInterval?: any; // Type 'any' pour setInterval --- IGNORE ---
   // ── Signaux UI ─────────────────────────────────────────────────
   selectedCardIndex = signal<number | null>(null);
-  turnPhase = signal<string>('Choisissez une carte');
+  flyingCardIndex = signal<number | null>(null);
+  turnPhase = signal<string>('Choose a card');
 
   // ── Dérivés ────────────────────────────────────────────────────
-  canConfirm = computed(() => this.gameStateService.canPlay());
 
   /** Vrai si le serveur indique qu'aucun coup légal n'est disponible. */
   isDiscardMode = computed(() =>
@@ -66,16 +75,36 @@ export class TableComponent implements OnInit, OnDestroy {
     return timer > 0 ? this.timeLeft() / timer : 0;
   });
 
-  constructor(protected gameStateService: GameStateService) { }
+  constructor(protected gameStateService: GameStateService) {
+    // Clear the flying card once the server updates the hand
+    effect(() => {
+      this.gameStateService.data()?.gameState.hand;
+      this.flyingCardIndex.set(null);
+    });
+  }
 
   ngOnInit(): void {
     this.gameStateService.newTurn.subscribe(() => {
       this.startTimer();
+      this.updateTurnPhase();
     });
   }
 
   ngOnDestroy(): void {
     this.clearTimer();
+  }
+
+  private updateTurnPhase() {
+    let turnPhaseText = TURN_PHASE.MARBLE;
+    if (!this.gameStateService.isMyTurn())
+      turnPhaseText = TURN_PHASE.WAIT;
+    else if (this.isDiscardMode())
+      turnPhaseText = TURN_PHASE.DISCARD;
+    else if (this.selectedCardIndex() == null)
+      turnPhaseText = TURN_PHASE.CARD;
+    else if (this.gameStateService.canPlay())
+      turnPhaseText = TURN_PHASE.CONFIRM
+    this.turnPhase.set(turnPhaseText);
   }
 
   // ── Timer ──────────────────────────────────────────────────────
@@ -105,22 +134,30 @@ export class TableComponent implements OnInit, OnDestroy {
   private onTimeUp(): void {
     console.warn('Temps écoulé !');
     this.selectedCardIndex.set(null);
-    this.turnPhase.set('Choisissez une carte');
+    this.turnPhase.set(TURN_PHASE.WAIT);
   }
 
   // ── Interactions ───────────────────────────────────────────────
   onCardSelected(index: number): void {
-    if (!this.gameStateService.isMyTurn()) return;
+    if (!this.gameStateService.isMyTurn()) {
+      this.turnPhase.set(TURN_PHASE.WAIT);
+      return;
+    }
+
+    if (this.isDiscardMode()) {
+      this.turnPhase.set(TURN_PHASE.DISCARD);
+      return;
+    }
 
     if (this.selectedCardIndex() === index) {
       this.selectedCardIndex.set(null);
       this.gameStateService.selectedCard.set(null);
-      this.turnPhase.set('Choisissez une carte');
+      this.turnPhase.set(TURN_PHASE.CARD);
     } else {
       const card = this.getPlayerHand()[index] ?? null;
       this.selectedCardIndex.set(index);
       this.gameStateService.selectedCard.set(card);
-      this.turnPhase.set('Choisissez une bille');
+      this.turnPhase.set(TURN_PHASE.MARBLE);
     }
   }
 
@@ -129,6 +166,30 @@ export class TableComponent implements OnInit, OnDestroy {
     if (!this.confirmOrDiscardEnabled()) return;
 
     const myColor = this.gameStateService.myPlayerColor()!;
+
+    // Capture the selected card's position relative to the discard pile for the fly animation
+    if (!this.isDiscardMode()) {
+      const idx = this.selectedCardIndex();
+      if (idx !== null) {
+        const cardEls = document.querySelectorAll<HTMLElement>('.playable-card');
+        const cardEl = cardEls[idx];
+        const discardEl = document.querySelector<HTMLElement>('.discard-pile');
+        if (cardEl && discardEl) {
+          const cRect = cardEl.getBoundingClientRect();
+          const dRect = discardEl.getBoundingClientRect();
+          const dx = (cRect.left + cRect.width / 2) - (dRect.left + dRect.width / 2);
+          const dy = (cRect.top + cRect.height / 2) - (dRect.top + dRect.height / 2);
+          const total = this.getPlayerHand().length;
+          const center = (total - 1) / 2;
+          const distFromCenter = idx - center;
+          const maxSpread = Math.min(total * 8, 60);
+          const step = total > 1 ? maxSpread / (total - 1) : 0;
+          const angle = step * distFromCenter;
+          this.gameStateService.playingCardStart.set({ dx, dy, angle });
+        }
+        this.flyingCardIndex.set(idx);
+      }
+    }
 
     if (this.isDiscardMode()) {
       // Aucun coup légal → défausse directe
@@ -151,7 +212,7 @@ export class TableComponent implements OnInit, OnDestroy {
     }
 
     this.selectedCardIndex.set(null);
-    this.turnPhase.set('Choisissez une carte');
+    this.turnPhase.set('Wait for your turn');
   }
 
   // ── Disposition des cartes en éventail ─────────────────────────

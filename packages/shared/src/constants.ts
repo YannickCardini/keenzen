@@ -25,7 +25,7 @@ export const TURN_DURATION_MS = TURN_DURATION_SECONDS * 1000;
 export const MARBLE_ANIMATION_DURATIONS: Record<ActionType, number> = {
   enter: 800,
   move: 200,
-  capture: 700,
+  capture: 250,
   swap: 900,
   promote: 1000,
   discard: 1000,

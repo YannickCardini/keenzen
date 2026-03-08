@@ -940,9 +940,9 @@ $colors: (
 
 @keyframes cardFlyFromBottom {
     0% {
-        opacity: 0;
-        transform: translate(0, 300%) rotate(-5deg) scale(0.5);
-        filter: blur(3px);
+        opacity: 1;
+        transform: translate(var(--fly-start-x, 0px), var(--fly-start-y, 300%)) rotate(var(--fly-start-angle, -5deg)) scale(0.85);
+        filter: blur(0);
     }
 
     35% {
