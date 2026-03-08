@@ -49,6 +49,16 @@ export class GameStateService {
     this.selectedMarblePosition() !== null
   );
 
+  clearLocalHand() {
+    this.data.update(state => {
+      if (!state) return state;
+      return {
+        ...state,
+        gameState: { ...state.gameState, hand: [] }
+      };
+    });
+  }
+
   // ── Flux ─────────────────────────────────────────────────────────────────
   newTurn = new BehaviorSubject<Date | null>(null);
   actionPlayed$ = new Subject<Action>();

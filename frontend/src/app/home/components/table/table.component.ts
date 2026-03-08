@@ -200,6 +200,7 @@ enum TURN_PHASE {
         cardPlayed: [],   // le serveur utilise player.cards
         playerColor: myColor,
       });
+      this.gameStateService.clearLocalHand();
     } else {
       // Coup normal : le serveur calcule type et to à partir de card + from
       this.gameStateService.playAction({
