@@ -413,9 +413,22 @@ export class BoardComponent implements OnInit, OnDestroy {
 
   // ── Interaction humain ────────────────────────────────────────────────────
 
-  /** Vrai si ce pion appartient au joueur local et peut être sélectionné. */
+  /** Vrai si une carte est sélectionnée (pour assombrir le board). */
+  isCardSelected(): boolean {
+    return this.gameStateService.isMyTurn() && this.gameStateService.selectedCard() !== null;
+  }
+
+  /** Vrai si ce pion appartient au joueur local (pour le faire passer au-dessus de l'overlay). */
+  isMyMarble(index: number): boolean {
+    return this.getMarbleOnSquare(index) === this.gameStateService.myPlayerColor();
+  }
+
+  /** Vrai si ce pion peut être sélectionné (uniquement après avoir choisi une carte, et seulement si jouable). */
   isSelectableMarble(index: number): boolean {
     if (!this.gameStateService.isMyTurn()) return false;
+    if (!this.gameStateService.selectedCard()) return false;
+    const playable = this.gameStateService.playableMarblePositions();
+    if (playable !== null) return playable.has(index);
     return this.getMarbleOnSquare(index) === this.gameStateService.myPlayerColor();
   }
 

@@ -152,11 +152,13 @@ enum TURN_PHASE {
     if (this.selectedCardIndex() === index) {
       this.selectedCardIndex.set(null);
       this.gameStateService.selectedCard.set(null);
+      this.gameStateService.selectedMarblePosition.set(null);
       this.turnPhase.set(TURN_PHASE.CARD);
     } else {
       const card = this.getPlayerHand()[index] ?? null;
       this.selectedCardIndex.set(index);
       this.gameStateService.selectedCard.set(card);
+      this.gameStateService.selectedMarblePosition.set(null);
       this.turnPhase.set(TURN_PHASE.MARBLE);
     }
   }
@@ -242,18 +244,6 @@ enum TURN_PHASE {
       'bottom': '0',
       'margin-left': `calc(var(--card-width) / -2)`,
     };
-  }
-
-  // ── Highlighting cartes ────────────────────────────────────────
-  isCardPlayable(index: number): boolean {
-    const playable = this.gameStateService.playableCardIndices();
-    return playable !== null && playable.has(index);
-  }
-
-  isCardDimmed(index: number): boolean {
-    const playable = this.gameStateService.playableCardIndices();
-    if (playable === null) return false;
-    return !playable.has(index);
   }
 
   // ── Données ────────────────────────────────────────────────────
