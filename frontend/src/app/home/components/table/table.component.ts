@@ -17,6 +17,7 @@ enum TURN_PHASE {
   DISCARD = "No playable moves",
   CARD = "Choose a card",
   MARBLE = "Choose a Marble",
+  SWAP_TARGET = "Choose a target marble",
   WAIT = "Wait for your turn",
   CONFIRM = "Confirm your move",
 }
@@ -40,6 +41,13 @@ enum TURN_PHASE {
   selectedCardIndex = signal<number | null>(null);
   flyingCardIndex = signal<number | null>(null);
   turnPhase = signal<string>('Choose a card');
+
+  /** Vrai quand le Jack est sélectionné et que la bille propre est choisie mais pas encore la cible. */
+  isJackWaitingForTarget = computed(() =>
+    this.gameStateService.selectedCard()?.value === 'J' &&
+    this.gameStateService.selectedMarblePosition() !== null &&
+    !this.gameStateService.canPlay()
+  );
 
   /** Bannière "temps écoulé" : couleur du joueur concerné, null = masqué */
   timeoutBannerColor = signal<MarbleColor | null>(null);
@@ -116,7 +124,12 @@ enum TURN_PHASE {
     else if (this.selectedCardIndex() == null)
       turnPhaseText = TURN_PHASE.CARD;
     else if (this.gameStateService.canPlay())
-      turnPhaseText = TURN_PHASE.CONFIRM
+      turnPhaseText = TURN_PHASE.CONFIRM;
+    else if (
+      this.gameStateService.selectedCard()?.value === 'J' &&
+      this.gameStateService.selectedMarblePosition() !== null
+    )
+      turnPhaseText = TURN_PHASE.SWAP_TARGET;
     this.turnPhase.set(turnPhaseText);
   }
 
@@ -182,6 +195,7 @@ enum TURN_PHASE {
       this.selectedCardIndex.set(index);
       this.gameStateService.selectedCard.set(card);
       this.gameStateService.selectedMarblePosition.set(null);
+      this.gameStateService.selectedSwapTargetPosition.set(null);
       this.turnPhase.set(TURN_PHASE.MARBLE);
     }
   }
@@ -228,11 +242,16 @@ enum TURN_PHASE {
       this.gameStateService.clearLocalHand();
     } else {
       // Coup normal : le serveur calcule type et to à partir de card + from
+      // Pour le Jack, on inclut la cible du swap dans `to`
+      const card = this.gameStateService.selectedCard()!;
+      const to = card.value === 'J'
+        ? (this.gameStateService.selectedSwapTargetPosition() ?? 0)
+        : 0;
       this.gameStateService.playAction({
         type: 'move',   // placeholder
         from: this.gameStateService.selectedMarblePosition()!,
-        to: 0,          // placeholder
-        cardPlayed: [this.gameStateService.selectedCard()!],
+        to,
+        cardPlayed: [card],
         playerColor: myColor,
       });
     }

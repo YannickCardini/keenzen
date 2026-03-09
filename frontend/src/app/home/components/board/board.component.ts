@@ -239,6 +239,22 @@ export class BoardComponent implements OnInit, OnDestroy {
         await applyAndWait(action.to, { marbleClass: 'marble-promoting', squareClass: 'square-promoting' });
         break;
 
+      case 'swap': {
+        const targetColor = this.displayedGameData()?.gameState.players.find(
+          p => p.color !== action.playerColor && (p.marblePositions ?? []).includes(action.to)
+        )?.color;
+        // Déplacer les deux billes avant l'animation
+        this.updateMarblePosition(action);
+        if (targetColor) {
+          this.updateMarblePosition({ ...action, playerColor: targetColor, from: action.to, to: action.from });
+        }
+        await Promise.all([
+          applyAndWait(action.to, { marbleClass: 'marble-entering' }),
+          applyAndWait(action.from, { marbleClass: 'marble-entering' }),
+        ]);
+        break;
+      }
+
       default:
         this.updateMarblePosition(action);
     }
@@ -433,7 +449,8 @@ export class BoardComponent implements OnInit, OnDestroy {
   }
 
   isSelectedMarble(index: number): boolean {
-    return this.gameStateService.selectedMarblePosition() === index;
+    return this.gameStateService.selectedMarblePosition() === index
+      || this.gameStateService.selectedSwapTargetPosition() === index;
   }
 
   /** Marble jouable avec la carte sélectionnée (à mettre en surbrillance). */
@@ -450,9 +467,26 @@ export class BoardComponent implements OnInit, OnDestroy {
   }
 
   onMarbleClick(index: number): void {
+    const selected = this.gameStateService.selectedMarblePosition();
+
+    // Permet de désélectionner sa propre bille en recliquant dessus
+    if (selected === index) {
+      this.gameStateService.selectedMarblePosition.set(null);
+      this.gameStateService.selectedSwapTargetPosition.set(null);
+      return;
+    }
+
     if (!this.isSelectableMarble(index)) return;
 
-    const current = this.gameStateService.selectedMarblePosition();
-    this.gameStateService.selectedMarblePosition.set(current === index ? null : index);
+    const card = this.gameStateService.selectedCard();
+    if (card?.value === 'J' && selected !== null) {
+      // Phase 2 du Jack : sélection de la bille cible adverse
+      const currentTarget = this.gameStateService.selectedSwapTargetPosition();
+      this.gameStateService.selectedSwapTargetPosition.set(currentTarget === index ? null : index);
+    } else {
+      // Sélection normale : propre bille
+      this.gameStateService.selectedMarblePosition.set(index);
+      this.gameStateService.selectedSwapTargetPosition.set(null);
+    }
   }
 }

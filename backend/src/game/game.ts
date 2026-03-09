@@ -231,8 +231,9 @@ export class Game {
         if (!player.cards.some(c => c.id === card.id)) return null;
 
         // Le serveur recalcule lui-même l'action légale à partir de card + from.
-        // On ne fait pas confiance au type/to du client — le serveur est autoritaire.
-        const serverAction = getLegalAction(card, action.from, ctx);
+        // Pour le Jack, on passe aussi action.to (la cible du swap choisie par le client).
+        const target = card.value === 'J' ? action.to : undefined;
+        const serverAction = getLegalAction(card, action.from, ctx, target);
         if (!serverAction) return null;
 
         return { ...serverAction, playerColor: player.color };
@@ -411,9 +412,24 @@ export class Game {
                 break;
             }
 
-            case 'swap':
-                // TODO Phase 4 (carte J)
+            case 'swap': {
+                // Déplacer le pion du joueur courant de `from` vers `to`
+                const ownIdx = player.marblePositions.indexOf(move.from);
+                if (ownIdx !== -1) {
+                    player.marblePositions[ownIdx] = move.to;
+                }
+                // Déplacer le pion adverse de `to` vers `from`
+                for (const other of this.players) {
+                    if (other === player) continue;
+                    const otherIdx = other.marblePositions.indexOf(move.to);
+                    if (otherIdx !== -1) {
+                        other.marblePositions[otherIdx] = move.from;
+                        console.log(`🔄 ${player.name} a échangé avec ${other.name} (${move.from} ↔ ${move.to})`);
+                        break;
+                    }
+                }
                 break;
+            }
 
             case 'pass':
             case 'discard':

@@ -61,6 +61,10 @@ function isAnyStartPosition(position: number): boolean {
     return Object.values(START_POSITIONS).includes(position);
 }
 
+function isOnAnyArrivalPosition(position: number): boolean {
+    return Object.values(ARRIVAL_POSITIONS).some(arr => arr.includes(position));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation d'un coup
 // ─────────────────────────────────────────────────────────────────────────────
@@ -68,10 +72,11 @@ function isAnyStartPosition(position: number): boolean {
 export function getLegalAction(
     card: Card,
     marblePosition: number,
-    ctx: LegalMoveContext
+    ctx: LegalMoveContext,
+    targetPosition?: number
 ): Action | null {
 
-    const { playerColor, ownMarbles } = ctx;
+    const { playerColor, ownMarbles, allMarbles } = ctx;
     const startPos = getStartPosition(playerColor);
     const homePositions = HOME_POSITIONS[playerColor];
 
@@ -99,6 +104,24 @@ export function getLegalAction(
             return buildMoveAction(card, marblePosition, 1, ctx);
         }
         return null;
+    }
+
+    if (card.value === 'J') {
+        if (!isOnMainPath(marblePosition)) return null;
+
+        const opponentMarbles = allMarbles.filter(pos => !ownMarbles.includes(pos));
+        const swappableTargets = opponentMarbles.filter(pos =>
+            !isAnyStartPosition(pos) && !isOnAnyArrivalPosition(pos)
+        );
+
+        if (targetPosition !== undefined) {
+            if (!swappableTargets.includes(targetPosition)) return null;
+            return { type: 'swap', from: marblePosition, to: targetPosition, cardPlayed: [card], playerColor };
+        }
+
+        const target = swappableTargets[0];
+        if (target === undefined) return null;
+        return { type: 'swap', from: marblePosition, to: target, cardPlayed: [card], playerColor };
     }
 
     const distance = CARD_MOVE_DISTANCE[card.value];

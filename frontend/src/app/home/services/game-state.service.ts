@@ -41,6 +41,8 @@ export class GameStateService {
   // ── Sélection en cours (carte + bille) ───────────────────────────────────
   selectedCard = signal<Card | null>(null);
   selectedMarblePosition = signal<number | null>(null);
+  /** Pour le Jack : position de la bille cible du swap (adverse). */
+  selectedSwapTargetPosition = signal<number | null>(null);
 
   /** Position de départ de la carte jouée (pour l'animation depuis la main). */
   playingCardStart = signal<{ dx: number; dy: number; angle: number } | null>(null);
@@ -64,18 +66,25 @@ export class GameStateService {
       allMarbles: data.gameState.players.flatMap(p => p.marblePositions),
       playerColor: myColor,
     };
+
+    if (card.value === 'J') {
+      const swapTarget = this.selectedSwapTargetPosition();
+      if (swapTarget === null) return false;
+      return getLegalAction(card, marblePos, ctx, swapTarget) !== null;
+    }
+
     return getLegalAction(card, marblePos, ctx) !== null;
   });
 
   /**
    * Positions des marbles jouables avec la carte sélectionnée.
    * null = pas de carte sélectionnée (aucun filtre actif).
-   * Seulement actif quand la carte est sélectionnée mais pas encore de marble.
+   * Pour le Jack après sélection d'une bille propre : retourne les cibles adverses échangeables.
    */
   playableMarblePositions = computed<Set<number> | null>(() => {
     if (!this.isMyTurn()) return null;
     const card = this.selectedCard();
-    if (!card || this.selectedMarblePosition() !== null) return null;
+    if (!card) return null;
 
     const data = this.data();
     const myColor = this.myPlayerColor();
@@ -84,17 +93,38 @@ export class GameStateService {
     const player = data.gameState.players.find(p => p.color === myColor);
     if (!player) return null;
 
+    const allMarbles = data.gameState.players.flatMap(p => p.marblePositions);
     const ctx: LegalMoveContext = {
       ownMarbles: player.marblePositions,
-      allMarbles: data.gameState.players.flatMap(p => p.marblePositions),
+      allMarbles,
       playerColor: myColor,
     };
 
+    if (card.value === 'J') {
+      const selectedOwn = this.selectedMarblePosition();
+      if (selectedOwn === null) {
+        // Phase 1 : montrer les billes propres qui peuvent initier un swap
+        const playable = new Set<number>();
+        for (const pos of player.marblePositions) {
+          if (getLegalAction(card, pos, ctx) !== null) playable.add(pos);
+        }
+        return playable;
+      } else {
+        // Phase 2 : montrer les billes adverses échangeables
+        const opponentMarbles = allMarbles.filter(pos => !player.marblePositions.includes(pos));
+        const playable = new Set<number>();
+        for (const pos of opponentMarbles) {
+          if (getLegalAction(card, selectedOwn, ctx, pos) !== null) playable.add(pos);
+        }
+        return playable;
+      }
+    }
+
+    if (this.selectedMarblePosition() !== null) return null;
+
     const playable = new Set<number>();
     for (const pos of player.marblePositions) {
-      if (getLegalAction(card, pos, ctx) !== null) {
-        playable.add(pos);
-      }
+      if (getLegalAction(card, pos, ctx) !== null) playable.add(pos);
     }
     return playable;
   });
@@ -123,6 +153,7 @@ export class GameStateService {
     this.newTurn.subscribe(() => {
       this.selectedCard.set(null);
       this.selectedMarblePosition.set(null);
+      this.selectedSwapTargetPosition.set(null);
     });
   }
 
@@ -205,6 +236,7 @@ export class GameStateService {
     this.send(JSON.stringify(msg));
     this.selectedCard.set(null);
     this.selectedMarblePosition.set(null);
+    this.selectedSwapTargetPosition.set(null);
   }
 
   sendAnimationDone(): void {
