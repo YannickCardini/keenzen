@@ -129,6 +129,37 @@ export class GameStateService {
     return playable;
   });
 
+  /**
+   * Positions des billes propres jouables avec la carte sélectionnée.
+   * Contrairement à playableMarblePositions, ce computed ne dépend pas de
+   * selectedMarblePosition — il reste stable pendant toute la phase de sélection.
+   * Utilisé par isDimmedMarble pour maintenir le grisage après sélection.
+   */
+  playableOwnMarbles = computed<Set<number> | null>(() => {
+    if (!this.isMyTurn()) return null;
+    const card = this.selectedCard();
+    if (!card) return null;
+
+    const data = this.data();
+    const myColor = this.myPlayerColor();
+    if (!data || !myColor) return null;
+
+    const player = data.gameState.players.find(p => p.color === myColor);
+    if (!player) return null;
+
+    const ctx: LegalMoveContext = {
+      ownMarbles: player.marblePositions,
+      allMarbles: data.gameState.players.flatMap(p => p.marblePositions),
+      playerColor: myColor,
+    };
+
+    const playable = new Set<number>();
+    for (const pos of player.marblePositions) {
+      if (getLegalAction(card, pos, ctx) !== null) playable.add(pos);
+    }
+    return playable;
+  });
+
   clearLocalHand() {
     this.data.update(state => {
       if (!state) return state;

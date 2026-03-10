@@ -38,7 +38,8 @@
               getMarbleAnimClass(index),
               isSelectableMarble(index) ? 'marble-selectable' : '',
               isSelectedMarble(index)   ? 'marble-selected'   : '',
-              isMyMarble(index)         ? 'marble-mine'        : ''
+              isMyMarble(index)         ? 'marble-mine'        : '',
+              isDimmedMarble(index)     ? 'marble-dimmed'      : ''
             ]"
             (click)="onMarbleClick(index)">
             <div class="marble-highlight"></div>

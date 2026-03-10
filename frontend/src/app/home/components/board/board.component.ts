@@ -249,8 +249,8 @@ export class BoardComponent implements OnInit, OnDestroy {
           this.updateMarblePosition({ ...action, playerColor: targetColor, from: action.to, to: action.from });
         }
         await Promise.all([
-          applyAndWait(action.to, { marbleClass: 'marble-entering' }),
-          applyAndWait(action.from, { marbleClass: 'marble-entering' }),
+          applyAndWait(action.to, { marbleClass: 'marble-swapping' }),
+          applyAndWait(action.from, { marbleClass: 'marble-swapping' }),
         ]);
         break;
       }
@@ -445,7 +445,10 @@ export class BoardComponent implements OnInit, OnDestroy {
     if (!this.gameStateService.selectedCard()) return false;
     const playable = this.gameStateService.playableMarblePositions();
     if (playable !== null) return playable.has(index);
-    return this.getMarbleOnSquare(index) === this.gameStateService.myPlayerColor();
+    // When a marble is selected, own playable marbles are still clickable (to switch selection)
+    const playableOwn = this.gameStateService.playableOwnMarbles();
+    if (playableOwn !== null) return playableOwn.has(index);
+    return false;
   }
 
   isSelectedMarble(index: number): boolean {
@@ -459,34 +462,37 @@ export class BoardComponent implements OnInit, OnDestroy {
     return playable !== null && playable.has(index);
   }
 
-  /** Marble non-jouable avec la carte sélectionnée (à griser). */
+  /** Marble non-jouable avec la carte sélectionnée (à atténuer). */
   isDimmedMarble(index: number): boolean {
-    const playable = this.gameStateService.playableMarblePositions();
+    const playable = this.gameStateService.playableOwnMarbles();
     if (playable === null) return false;
+    if (this.isSelectedMarble(index)) return false;
     return this.getMarbleOnSquare(index) === this.gameStateService.myPlayerColor() && !playable.has(index);
   }
 
   onMarbleClick(index: number): void {
     const selected = this.gameStateService.selectedMarblePosition();
+    const card = this.gameStateService.selectedCard();
 
-    // Permet de désélectionner sa propre bille en recliquant dessus
+    // Clic sur la bille déjà sélectionnée → désélectionner
     if (selected === index) {
       this.gameStateService.selectedMarblePosition.set(null);
       this.gameStateService.selectedSwapTargetPosition.set(null);
       return;
     }
 
-    if (!this.isSelectableMarble(index)) return;
-
-    const card = this.gameStateService.selectedCard();
-    if (card?.value === 'J' && selected !== null) {
-      // Phase 2 du Jack : sélection de la bille cible adverse
-      const currentTarget = this.gameStateService.selectedSwapTargetPosition();
-      this.gameStateService.selectedSwapTargetPosition.set(currentTarget === index ? null : index);
-    } else {
-      // Sélection normale : propre bille
+    // Clic sur une autre bille propre jouable → changer directement la sélection
+    const playableOwn = this.gameStateService.playableOwnMarbles();
+    if (playableOwn !== null && playableOwn.has(index)) {
       this.gameStateService.selectedMarblePosition.set(index);
       this.gameStateService.selectedSwapTargetPosition.set(null);
+      return;
+    }
+
+    // Jack phase 2 : clic sur une bille adverse échangeable → définir la cible
+    if (card?.value === 'J' && selected !== null && this.isSelectableMarble(index)) {
+      const currentTarget = this.gameStateService.selectedSwapTargetPosition();
+      this.gameStateService.selectedSwapTargetPosition.set(currentTarget === index ? null : index);
     }
   }
 }

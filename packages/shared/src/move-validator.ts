@@ -65,6 +65,10 @@ function isOnAnyArrivalPosition(position: number): boolean {
     return Object.values(ARRIVAL_POSITIONS).some(arr => arr.includes(position));
 }
 
+function isOnAnyHomePosition(position: number): boolean {
+    return Object.values(HOME_POSITIONS).some(arr => arr.includes(position));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Validation d'un coup
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,10 +112,11 @@ export function getLegalAction(
 
     if (card.value === 'J') {
         if (!isOnMainPath(marblePosition)) return null;
+        if (marblePosition === startPos) return null;
 
         const opponentMarbles = allMarbles.filter(pos => !ownMarbles.includes(pos));
         const swappableTargets = opponentMarbles.filter(pos =>
-            !isAnyStartPosition(pos) && !isOnAnyArrivalPosition(pos)
+            !isAnyStartPosition(pos) && !isOnAnyArrivalPosition(pos) && !isOnAnyHomePosition(pos)
         );
 
         if (targetPosition !== undefined) {
