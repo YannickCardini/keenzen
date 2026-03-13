@@ -53,17 +53,20 @@
     </div>
   </div>
 
-  <!-- ===== COMPTEUR DE PAS DU 7 ===== -->
+  <!-- ===== SÉLECTEUR DE SPLIT DU 7 ===== -->
   @if (showSevenStepCounter()) {
   <div class="seven-step-counter">
-    <button class="step-btn" (click)="decrementSevenSteps()"
-      [disabled]="validSevenSteps().indexOf(gameStateService.sevenFirstSteps()) === 0">−</button>
-    <div class="step-display">
-      <span class="step-value">{{ gameStateService.sevenFirstSteps() }}</span>
-      <span class="step-label">/ {{ 7 - gameStateService.sevenFirstSteps() }}</span>
+    <span class="split-label">Split</span>
+    <div class="step-buttons-row">
+      @for (step of validSplitSevenSteps(); track step) {
+        <button class="step-select-btn"
+          [class.step-select-btn--active]="gameStateService.sevenFirstSteps() === step"
+          (click)="selectSevenSteps(step)">{{ step }}</button>
+      }
     </div>
-    <button class="step-btn" (click)="incrementSevenSteps()"
-      [disabled]="validSevenSteps().indexOf(gameStateService.sevenFirstSteps()) === validSevenSteps().length - 1">+</button>
+    @if (gameStateService.sevenFirstSteps() < 7) {
+      <span class="split-summary">{{ gameStateService.sevenFirstSteps() }} / {{ 7 - gameStateService.sevenFirstSteps() }}</span>
+    }
   </div>
   }
 

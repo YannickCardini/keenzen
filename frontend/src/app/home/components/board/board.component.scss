@@ -1121,6 +1121,47 @@ $colors: (
     transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
+/* --------------------------------------------------------------------------
+   PREVIEW DE TRAJET — mise en évidence des cases traversées / de destination
+   -------------------------------------------------------------------------- */
+.case-path.square-preview-path {
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.18);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+        pointer-events: none;
+        z-index: 5;
+        animation: previewPathPulse 1.2s ease-in-out infinite;
+    }
+}
+
+.case-path.square-preview-destination {
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: rgba(255, 220, 80, 0.22);
+        box-shadow: 0 0 0 2px rgba(255, 220, 80, 0.7), 0 0 12px rgba(255, 220, 80, 0.5);
+        pointer-events: none;
+        z-index: 5;
+        animation: previewDestPulse 1s ease-in-out infinite;
+    }
+}
+
+@keyframes previewPathPulse {
+    0%, 100% { opacity: 0.6; }
+    50%       { opacity: 1; }
+}
+
+@keyframes previewDestPulse {
+    0%, 100% { box-shadow: 0 0 0 2px rgba(255, 220, 80, 0.7), 0 0 12px rgba(255, 220, 80, 0.5); }
+    50%       { box-shadow: 0 0 0 3px rgba(255, 220, 80, 0.9), 0 0 20px rgba(255, 220, 80, 0.7); }
+}
+
 /* Lévitation et halo lumineux quand le pion est sélectionné */
 @keyframes levitateSelected {
 

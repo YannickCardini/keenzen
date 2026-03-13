@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, OnDestroy, signal, effect } from '@angular/core';
+import { Component, HostListener, OnInit, OnDestroy, signal, computed, effect } from '@angular/core';
 import { GameStateService } from '../../services/game-state.service';
 import { IonCol, IonGrid, IonRow } from '@ionic/angular/standalone';
 import { CommonModule } from '@angular/common';
@@ -25,6 +25,8 @@ import {
   GameStateMessage,
   MAIN_PATH,
   getPositionAfterMove,
+  getLegalAction,
+  type LegalMoveContext,
 } from '@keezen/shared';
 
 export interface CardInfo {
@@ -68,6 +70,72 @@ export class BoardComponent implements OnInit, OnDestroy {
   /** Cartes en vol simultanées lors d'un discard (plusieurs cartes) */
   flyingCards = signal<Array<CardInfo & { flyIndex: number }>>([]);
   displayedGameData = signal<GameStateMessage | null>(null);
+
+  // ── Preview de mouvement ────────────────────────────────────────────────────
+  /** Position de la bille survolée (pour la preview de trajet). */
+  hoveredMarble = signal<number | null>(null);
+
+  /** Squares à mettre en évidence : chemin intermédiaire + destination. */
+  previewInfo = computed<{ path: Set<number>; destination: number | null }>(() => {
+    if (!this.gameStateService.isMyTurn()) return { path: new Set(), destination: null };
+
+    const card = this.gameStateService.selectedCard();
+    if (!card) return { path: new Set(), destination: null };
+
+    const focusedMarble = this.hoveredMarble() ?? this.gameStateService.selectedMarblePosition();
+    if (focusedMarble === null) return { path: new Set(), destination: null };
+
+    const data = this.gameStateService.data();
+    const myColor = this.gameStateService.myPlayerColor();
+    if (!data || !myColor) return { path: new Set(), destination: null };
+
+    const player = data.gameState.players.find(p => p.color === myColor);
+    if (!player) return { path: new Set(), destination: null };
+
+    const marblesByColor = Object.fromEntries(
+      data.gameState.players.map(p => [p.color, p.marblePositions])
+    ) as Record<MarbleColor, number[]>;
+    const ctx: LegalMoveContext = {
+      ownMarbles: player.marblePositions,
+      allMarbles: data.gameState.players.flatMap(p => p.marblePositions),
+      playerColor: myColor,
+      marblesByColor,
+    };
+
+    let action: Action | null = null;
+
+    if (card.value === '7') {
+      const steps1 = this.gameStateService.sevenFirstSteps();
+      const marble1 = this.gameStateService.selectedMarblePosition();
+      if (steps1 < 7 && marble1 !== null) {
+        // Show path for whichever marble is focused
+        const stepsForFocused = focusedMarble === marble1 ? steps1 : 7 - steps1;
+        const to = getPositionAfterMove(focusedMarble, stepsForFocused);
+        if (to !== null) {
+          action = { type: 'move', from: focusedMarble, to, cardPlayed: [card], playerColor: myColor };
+        }
+      } else {
+        action = getLegalAction(card, focusedMarble, ctx);
+      }
+    } else if (card.value === 'J') {
+      const marble1 = this.gameStateService.selectedMarblePosition();
+      if (marble1 !== null) {
+        // Hovering a swap target — show swap destinations for both marbles
+        const swapAction = getLegalAction(card, marble1, ctx, focusedMarble);
+        if (swapAction) {
+          return { path: new Set([swapAction.from, swapAction.to]), destination: null };
+        }
+        return { path: new Set(), destination: null };
+      } else {
+        action = getLegalAction(card, focusedMarble, ctx);
+      }
+    } else {
+      action = getLegalAction(card, focusedMarble, ctx);
+    }
+
+    if (!action) return { path: new Set(), destination: null };
+    return this.computePreviewFromAction(action);
+  });
 
   debug = true;
 
@@ -288,6 +356,67 @@ export class BoardComponent implements OnInit, OnDestroy {
       default:
         this.updateMarblePosition(action);
     }
+  }
+
+  // ── Preview helpers ─────────────────────────────────────────────────────────
+
+  private computePreviewFromAction(action: Action): { path: Set<number>; destination: number | null } {
+    if (action.type === 'enter') {
+      return { path: new Set(), destination: action.to };
+    }
+
+    if (action.type === 'promote') {
+      const startPos = START_POSITIONS[action.playerColor as MarbleColor];
+      const startPosIndex = MAIN_PATH.indexOf(startPos);
+      const beforeStartPos = MAIN_PATH[(startPosIndex - 1 + MAIN_PATH.length) % MAIN_PATH.length];
+      const squares = this.getMainPathSquaresBetween(action.from, beforeStartPos);
+      const path = new Set(squares.slice(1)); // exclude starting square, include beforeStartPos
+      return { path, destination: action.to };
+    }
+
+    // move / capture — intermediate squares on MAIN_PATH, excluding from and to
+    const squares = this.getMainPathSquaresBetween(action.from, action.to);
+    const path = new Set(squares.slice(1, -1));
+    return { path, destination: action.to };
+  }
+
+  private getMainPathSquaresBetween(from: number, to: number): number[] {
+    const startIndex = MAIN_PATH.indexOf(from);
+    const endIndex = MAIN_PATH.indexOf(to);
+    if (startIndex === -1 || endIndex === -1) return [];
+
+    const forwardDist = (endIndex - startIndex + MAIN_PATH.length) % MAIN_PATH.length;
+    const backwardDist = (startIndex - endIndex + MAIN_PATH.length) % MAIN_PATH.length;
+    const goBackward = backwardDist < forwardDist;
+
+    const path: number[] = [];
+    let currentIndex = startIndex;
+    while (currentIndex !== endIndex) {
+      path.push(MAIN_PATH[currentIndex]!);
+      currentIndex = goBackward
+        ? (currentIndex - 1 + MAIN_PATH.length) % MAIN_PATH.length
+        : (currentIndex + 1) % MAIN_PATH.length;
+    }
+    path.push(MAIN_PATH[endIndex]!);
+    return path;
+  }
+
+  isPreviewPath(index: number): boolean {
+    return this.previewInfo().path.has(index);
+  }
+
+  isPreviewDestination(index: number): boolean {
+    return this.previewInfo().destination === index;
+  }
+
+  onMarbleMouseEnter(index: number): void {
+    if (this.gameStateService.isMyTurn() && this.gameStateService.selectedCard()) {
+      this.hoveredMarble.set(index);
+    }
+  }
+
+  onMarbleMouseLeave(index: number): void {
+    if (this.hoveredMarble() === index) this.hoveredMarble.set(null);
   }
 
   private calculateActionsMove(action: Action): Action[] {

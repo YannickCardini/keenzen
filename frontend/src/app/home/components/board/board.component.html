@@ -30,7 +30,9 @@
         }
 
         @else {
-        <div [class]="getSquareClass(index)" [ngClass]="getSquareAnimClass(index)">
+        <div [class]="getSquareClass(index)" [ngClass]="getSquareAnimClass(index)"
+          [class.square-preview-path]="isPreviewPath(index)"
+          [class.square-preview-destination]="isPreviewDestination(index)">
           @if (getMarbleOnSquare(index); as marbleColor) {
           <div class="marble"
             [ngClass]="[
@@ -41,7 +43,9 @@
               isMyMarble(index)         ? 'marble-mine'        : '',
               isDimmedMarble(index)     ? 'marble-dimmed'      : ''
             ]"
-            (click)="onMarbleClick(index)">
+            (click)="onMarbleClick(index)"
+            (mouseenter)="onMarbleMouseEnter(index)"
+            (mouseleave)="onMarbleMouseLeave(index)">
             <div class="marble-highlight"></div>
           </div>
           }

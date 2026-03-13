@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { TockCardComponent } from 'src/app/shared/tock-card.component';
 import type { Card, MarbleColor } from '@keezen/shared';
-import { getValidSevenStepsForMarble, getPositionAfterMove, type LegalMoveContext } from '@keezen/shared';
+import { getValidSevenStepsForMarble, getPositionAfterMove, getLegalSplit7Action, type LegalMoveContext } from '@keezen/shared';
 import { Subscription } from 'rxjs';
 
 enum TURN_PHASE {
@@ -55,7 +55,8 @@ enum TURN_PHASE {
   showSevenStepCounter = computed(() =>
     this.gameStateService.isMyTurn() &&
     this.gameStateService.selectedCard()?.value === '7' &&
-    this.gameStateService.selectedMarblePosition() !== null
+    this.gameStateService.selectedMarblePosition() !== null &&
+    this.validSplitSevenSteps().length > 0
   );
 
   /** Pas valides (1–7) pour le premier pion sélectionné avec le 7. */
@@ -75,6 +76,36 @@ enum TURN_PHASE {
       marblesByColor,
     };
     return getValidSevenStepsForMarble(marble1, ctx);
+  });
+
+  /**
+   * Pas valides pour un split (1–6) : le premier pion peut avancer de i pas
+   * ET il existe au moins un second pion pouvant avancer de 7-i pas.
+   */
+  validSplitSevenSteps = computed<number[]>(() => {
+    const marble1 = this.gameStateService.selectedMarblePosition();
+    if (marble1 === null) return [];
+    const card = this.gameStateService.selectedCard();
+    if (!card || card.value !== '7') return [];
+    const myColor = this.gameStateService.myPlayerColor();
+    const data = this.gameStateService.data();
+    if (!myColor || !data) return [];
+    const player = data.gameState.players.find(p => p.color === myColor);
+    if (!player) return [];
+    const marblesByColor = Object.fromEntries(data.gameState.players.map(p => [p.color, p.marblePositions])) as Record<MarbleColor, number[]>;
+    const ctx: LegalMoveContext = {
+      ownMarbles: player.marblePositions,
+      allMarbles: data.gameState.players.flatMap(p => p.marblePositions),
+      playerColor: myColor,
+      marblesByColor,
+    };
+    const allValid = getValidSevenStepsForMarble(marble1, ctx);
+    return allValid.filter(steps => {
+      if (steps === 7) return false; // full move — not a split
+      return player.marblePositions.some(pos =>
+        pos !== marble1 && getLegalSplit7Action(card, marble1, steps, pos, ctx) !== null
+      );
+    });
   });
 
   /** Bannière "temps écoulé" : couleur du joueur concerné, null = masqué */
@@ -208,26 +239,16 @@ enum TURN_PHASE {
   }
 
   // ── 7 step counter ─────────────────────────────────────────────
-  decrementSevenSteps(): void {
-    const valid = this.validSevenSteps();
+  selectSevenSteps(steps: number): void {
     const current = this.gameStateService.sevenFirstSteps();
-    const idx = valid.indexOf(current);
-    if (idx > 0) {
-      this.gameStateService.sevenFirstSteps.set(valid[idx - 1]!);
-      this.gameStateService.selectedSplit7MarblePosition.set(null);
-      this.updateTurnPhase();
+    // Toggle off if clicking the already-selected step
+    if (current === steps) {
+      this.gameStateService.sevenFirstSteps.set(7);
+    } else {
+      this.gameStateService.sevenFirstSteps.set(steps);
     }
-  }
-
-  incrementSevenSteps(): void {
-    const valid = this.validSevenSteps();
-    const current = this.gameStateService.sevenFirstSteps();
-    const idx = valid.indexOf(current);
-    if (idx < valid.length - 1) {
-      this.gameStateService.sevenFirstSteps.set(valid[idx + 1]!);
-      this.gameStateService.selectedSplit7MarblePosition.set(null);
-      this.updateTurnPhase();
-    }
+    this.gameStateService.selectedSplit7MarblePosition.set(null);
+    this.updateTurnPhase();
   }
 
   // ── Interactions ───────────────────────────────────────────────
