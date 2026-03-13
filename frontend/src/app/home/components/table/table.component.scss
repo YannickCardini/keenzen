@@ -503,3 +503,56 @@
     &.timeout-banner--blue   { border-color: rgba( 59, 130, 246, 0.5); color: #93c5fd; background: rgba(59, 130, 246, 0.12); }
     &.timeout-banner--orange { border-color: rgba(249, 115,  22, 0.5); color: #fdba74; background: rgba(249, 115, 22, 0.12); }
 }
+/* =========================================
+   7 STEP COUNTER
+   ========================================= */
+.seven-step-counter {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+
+    .step-btn {
+        width: 2.2rem;
+        height: 2.2rem;
+        border-radius: 50%;
+        border: 1px solid var(--accent);
+        background: rgba(192, 132, 252, 0.12);
+        color: var(--accent);
+        font-size: 1.3rem;
+        line-height: 1;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+
+        &:hover:not(:disabled) {
+            background: rgba(192, 132, 252, 0.25);
+            transform: scale(1.1);
+        }
+
+        &:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+    }
+
+    .step-display {
+        display: flex;
+        align-items: baseline;
+        gap: 0.35rem;
+
+        .step-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            font-family: 'Playfair Display', serif;
+            line-height: 1;
+        }
+
+        .step-label {
+            font-size: 1rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+    }
+}

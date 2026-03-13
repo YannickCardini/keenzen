@@ -37,6 +37,7 @@ export interface LegalMoveContext {
     ownMarbles: number[];
     allMarbles: number[];
     playerColor: MarbleColor;
+    marblesByColor: Record<MarbleColor, number[]>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -176,7 +177,7 @@ function buildMoveAction(
     }
 
     if (ownMarbles.includes(to)) return null;
-    if (!pathIsClear(from, steps, playerColor, allMarbles)) return null;
+    if (!pathIsClear(from, steps, playerColor, allMarbles, ctx.marblesByColor)) return null;
 
     if (allMarbles.includes(to)) {
         return {
@@ -241,11 +242,19 @@ function startPositionBtwFromAndTo(from: number, to: number, playerColor: Marble
     return false;
 }
 
+function getStartPositionOwner(pos: number): MarbleColor | null {
+    for (const [color, startPos] of Object.entries(START_POSITIONS)) {
+        if (startPos === pos) return color as MarbleColor;
+    }
+    return null;
+}
+
 function pathIsClear(
     from: number,
     steps: number,
     playerColor: MarbleColor,
-    allMarbles: number[]
+    allMarbles: number[],
+    marblesByColor: Record<MarbleColor, number[]>
 ): boolean {
     const fromIndex = MAIN_PATH.indexOf(from);
     if (fromIndex === -1) return false;
@@ -263,7 +272,10 @@ function pathIsClear(
         if (pos === undefined) return false;
         if (pos === ownStartPos) return false;
         if (isAnyStartPosition(pos) && pos !== ownStartPos && allMarbles.includes(pos)) {
-            return false;
+            const owner = getStartPositionOwner(pos);
+            if (owner && marblesByColor[owner].includes(pos)) {
+                return false;
+            }
         }
     }
 
@@ -290,6 +302,79 @@ function getArrivelCaseIfCanPromote(
         if (indexOfFrom >= MAIN_PATH.length) indexOfFrom = 0;
     }
     return stepsRequiredToPromote === steps ? arrivalPositions[arrivalPositions.length - 1] || null : null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Logique du 7 (split)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retourne la liste des nombres de pas valides (1–7) pour un pion donné avec le 7.
+ * Utilisé par le frontend pour construire le sélecteur de split.
+ */
+export function getValidSevenStepsForMarble(
+    marblePos: number,
+    ctx: LegalMoveContext
+): number[] {
+    const dummyCard: Card = { id: '__7_check__', value: '7', suit: '♠' };
+    const valid: number[] = [];
+    for (let s = 1; s <= 7; s++) {
+        if (buildMoveAction(dummyCard, marblePos, s, ctx) !== null) {
+            valid.push(s);
+        }
+    }
+    return valid;
+}
+
+/**
+ * Valide un split du 7 :
+ *  - Premier pion : `from1` avance de `steps1` pas
+ *  - Second pion  : `from2` avance de `7 - steps1` pas
+ * Le contexte du second mouvement tient compte du déplacement du premier pion.
+ * Retourne l'Action composite ou null si illégal.
+ */
+export function getLegalSplit7Action(
+    card: Card,
+    from1: number,
+    steps1: number,
+    from2: number,
+    ctx: LegalMoveContext
+): Action | null {
+    if (steps1 < 1 || steps1 > 6) return null;
+    const steps2 = 7 - steps1;
+
+    const action1 = buildMoveAction(card, from1, steps1, ctx);
+    if (action1 === null) return null;
+    const to1 = action1.to;
+
+    if (!isOnMainPath(from2)) return null;
+
+    // Contexte mis à jour : le premier pion a déjà bougé
+    const ctx2: LegalMoveContext = {
+        ...ctx,
+        allMarbles: ctx.allMarbles.map(p => p === from1 ? to1 : p),
+        ownMarbles: ctx.ownMarbles.map(p => p === from1 ? to1 : p),
+        marblesByColor: Object.fromEntries(
+            Object.entries(ctx.marblesByColor).map(([color, positions]) => [
+                color,
+                positions.map(p => p === from1 ? to1 : p),
+            ])
+        ) as Record<MarbleColor, number[]>,
+    };
+
+    const action2 = buildMoveAction(card, from2, steps2, ctx2);
+    if (action2 === null) return null;
+
+    return {
+        type: action1.type,
+        from: from1,
+        to: to1,
+        cardPlayed: [card],
+        playerColor: ctx.playerColor,
+        splitFrom: from2,
+        splitTo: action2.to,
+        splitType: action2.type,
+    };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

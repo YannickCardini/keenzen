@@ -13,6 +13,9 @@ import {
   ServerMessage,
   MarbleColor,
   getLegalAction,
+  getLegalSplit7Action,
+  getValidSevenStepsForMarble,
+  getPositionAfterMove,
   type LegalMoveContext,
 } from '@keezen/shared';
 
@@ -43,6 +46,10 @@ export class GameStateService {
   selectedMarblePosition = signal<number | null>(null);
   /** Pour le Jack : position de la bille cible du swap (adverse). */
   selectedSwapTargetPosition = signal<number | null>(null);
+  /** Pour le 7 : nombre de pas attribués au premier pion (1–7, défaut 7). */
+  sevenFirstSteps = signal<number>(7);
+  /** Pour le 7 split : position du second pion sélectionné. */
+  selectedSplit7MarblePosition = signal<number | null>(null);
 
   /** Position de départ de la carte jouée (pour l'animation depuis la main). */
   playingCardStart = signal<{ dx: number; dy: number; angle: number } | null>(null);
@@ -61,16 +68,28 @@ export class GameStateService {
     const player = data.gameState.players.find(p => p.color === myColor);
     if (!player) return false;
 
+    const marblesByColor = Object.fromEntries(data.gameState.players.map(p => [p.color, p.marblePositions])) as Record<MarbleColor, number[]>;
     const ctx: LegalMoveContext = {
       ownMarbles: player.marblePositions,
       allMarbles: data.gameState.players.flatMap(p => p.marblePositions),
       playerColor: myColor,
+      marblesByColor,
     };
 
     if (card.value === 'J') {
       const swapTarget = this.selectedSwapTargetPosition();
       if (swapTarget === null) return false;
       return getLegalAction(card, marblePos, ctx, swapTarget) !== null;
+    }
+
+    if (card.value === '7') {
+      const steps1 = this.sevenFirstSteps();
+      if (steps1 === 7) {
+        return getLegalAction(card, marblePos, ctx) !== null;
+      }
+      const split2 = this.selectedSplit7MarblePosition();
+      if (split2 === null) return false;
+      return getLegalSplit7Action(card, marblePos, steps1, split2, ctx) !== null;
     }
 
     return getLegalAction(card, marblePos, ctx) !== null;
@@ -94,10 +113,12 @@ export class GameStateService {
     if (!player) return null;
 
     const allMarbles = data.gameState.players.flatMap(p => p.marblePositions);
+    const marblesByColor = Object.fromEntries(data.gameState.players.map(p => [p.color, p.marblePositions])) as Record<MarbleColor, number[]>;
     const ctx: LegalMoveContext = {
       ownMarbles: player.marblePositions,
       allMarbles,
       playerColor: myColor,
+      marblesByColor,
     };
 
     if (card.value === 'J') {
@@ -118,6 +139,27 @@ export class GameStateService {
         }
         return playable;
       }
+    }
+
+    if (card.value === '7') {
+      const marble1 = this.selectedMarblePosition();
+      if (marble1 === null) {
+        // Phase 1 : billes propres qui ont au moins 1 pas valide
+        const playable = new Set<number>();
+        for (const pos of player.marblePositions) {
+          if (getValidSevenStepsForMarble(pos, ctx).length > 0) playable.add(pos);
+        }
+        return playable;
+      }
+      const steps1 = this.sevenFirstSteps();
+      if (steps1 === 7) return null; // coup simple, pas de second pion
+      // Phase 2 : billes propres (hors premier pion) valides pour le second mouvement
+      const playable = new Set<number>();
+      for (const pos of player.marblePositions) {
+        if (pos === marble1) continue;
+        if (getLegalSplit7Action(card, marble1, steps1, pos, ctx) !== null) playable.add(pos);
+      }
+      return playable;
     }
 
     if (this.selectedMarblePosition() !== null) return null;
@@ -147,15 +189,21 @@ export class GameStateService {
     const player = data.gameState.players.find(p => p.color === myColor);
     if (!player) return null;
 
+    const marblesByColor = Object.fromEntries(data.gameState.players.map(p => [p.color, p.marblePositions])) as Record<MarbleColor, number[]>;
     const ctx: LegalMoveContext = {
       ownMarbles: player.marblePositions,
       allMarbles: data.gameState.players.flatMap(p => p.marblePositions),
       playerColor: myColor,
+      marblesByColor,
     };
 
     const playable = new Set<number>();
     for (const pos of player.marblePositions) {
-      if (getLegalAction(card, pos, ctx) !== null) playable.add(pos);
+      if (card.value === '7') {
+        if (getValidSevenStepsForMarble(pos, ctx).length > 0) playable.add(pos);
+      } else if (getLegalAction(card, pos, ctx) !== null) {
+        playable.add(pos);
+      }
     }
     return playable;
   });
@@ -185,6 +233,8 @@ export class GameStateService {
       this.selectedCard.set(null);
       this.selectedMarblePosition.set(null);
       this.selectedSwapTargetPosition.set(null);
+      this.sevenFirstSteps.set(7);
+      this.selectedSplit7MarblePosition.set(null);
     });
   }
 
@@ -268,6 +318,8 @@ export class GameStateService {
     this.selectedCard.set(null);
     this.selectedMarblePosition.set(null);
     this.selectedSwapTargetPosition.set(null);
+    this.sevenFirstSteps.set(7);
+    this.selectedSplit7MarblePosition.set(null);
   }
 
   sendAnimationDone(): void {

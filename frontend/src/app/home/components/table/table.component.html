@@ -53,6 +53,20 @@
     </div>
   </div>
 
+  <!-- ===== COMPTEUR DE PAS DU 7 ===== -->
+  @if (showSevenStepCounter()) {
+  <div class="seven-step-counter">
+    <button class="step-btn" (click)="decrementSevenSteps()"
+      [disabled]="validSevenSteps().indexOf(gameStateService.sevenFirstSteps()) === 0">−</button>
+    <div class="step-display">
+      <span class="step-value">{{ gameStateService.sevenFirstSteps() }}</span>
+      <span class="step-label">/ {{ 7 - gameStateService.sevenFirstSteps() }}</span>
+    </div>
+    <button class="step-btn" (click)="incrementSevenSteps()"
+      [disabled]="validSevenSteps().indexOf(gameStateService.sevenFirstSteps()) === validSevenSteps().length - 1">+</button>
+  </div>
+  }
+
   <!-- ===== INFOS CONTEXTUELLES (au-dessus du footer, cachées sur petits écrans) ===== -->
   <div class="context-info">
     <span class="turn-phase">

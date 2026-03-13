@@ -25,13 +25,14 @@ export class Player {
      * `allMarbles` = toutes les positions de pions sur le plateau (toutes couleurs),
      * fourni par Game au moment du tour — plus besoin de propriété mutable.
      */
-    getAction(allMarbles: number[]): Promise<Action> {
+    getAction(marblesByColor: Record<MarbleColor, number[]>): Promise<Action> {
         console.log(`${this.name} (${this.isHuman ? 'humain' : 'IA'}) calcule son coup...`);
 
         const ctx: LegalMoveContext = {
             ownMarbles: [...this.marblePositions],
-            allMarbles,
+            allMarbles: Object.values(marblesByColor).flat(),
             playerColor: this.color,
+            marblesByColor,
         };
         return this.strategy.getAction(ctx, this.cards);
     }

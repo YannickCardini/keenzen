@@ -52,6 +52,12 @@ export interface Action {
   cardPlayed: Card[] | null;
   /** Couleur du joueur qui a effectué l'action */
   playerColor: MarbleColor;
+  /** Pour un split du 7 : position de départ du second pion */
+  splitFrom?: number;
+  /** Pour un split du 7 : position d'arrivée du second pion */
+  splitTo?: number;
+  /** Pour un split du 7 : type de mouvement du second pion (move/capture/promote) */
+  splitType?: ActionType;
 }
 
 // ── Configuration de partie ───────────────────────────────────────────────────

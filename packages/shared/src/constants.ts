@@ -33,7 +33,7 @@ export const TURN_TIMEOUT_OFFSET_MS = 5000;
 export const MARBLE_ANIMATION_DURATIONS: Record<ActionType, number> = {
   enter: 800,
   move: 200,
-  capture: 250,
+  capture: 800,
   swap: 900,
   promote: 1000,
   discard: 1000,
@@ -65,3 +65,11 @@ export const CARDS_PER_HAND = 5;
 
 /** Cartes qui permettent d'entrer un pion en jeu. */
 export const ENTER_CARDS: string[] = ['A', 'K'];
+
+// ── Durées d'animation enter+capture (ms) ────────────────────────────────────
+
+/** Durée de l'animation d'impact du pion entrant sur la case (squash/rebound). */
+export const ENTER_IMPACT_DURATION_MS = 500;
+
+/** Durée de l'animation d'éjection du pion ennemi lors d'un enter+capture. */
+export const MARBLE_EJECTED_DURATION_MS = 400;

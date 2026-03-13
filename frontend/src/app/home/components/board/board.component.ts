@@ -18,10 +18,13 @@ import {
   PLAYER_INFO_STARTS,
   SKIPPED_INDICES,
   MARBLE_ANIMATION_DURATIONS,
+  ENTER_IMPACT_DURATION_MS,
+  MARBLE_EJECTED_DURATION_MS,
   CARD_LAND_DELAY_MS,
   CARD_FLY_DURATION_MS,
   GameStateMessage,
   MAIN_PATH,
+  getPositionAfterMove,
 } from '@keezen/shared';
 
 export interface CardInfo {
@@ -178,10 +181,10 @@ export class BoardComponent implements OnInit, OnDestroy {
 
     if (duration === 0) return;
 
-    const applyAndWait = (index: number, anim: SquareAnimation) => {
+    const applyAndWait = (index: number, anim: SquareAnimation, overrideDuration?: number) => {
+      const d = overrideDuration ?? duration;
       return new Promise<void>(res => {
         this.squareAnimations.update(prev => ({ ...prev, [index]: anim }));
-
         setTimeout(() => {
           this.squareAnimations.update(prev => {
             const next = { ...prev };
@@ -189,61 +192,88 @@ export class BoardComponent implements OnInit, OnDestroy {
             return next;
           });
           res();
-        }, duration);
+        }, d);
       });
     };
 
-
-    switch (type) {
-      case 'enter':
-        this.updateMarblePosition(action); // On place le pion sur le 'start'
-        await applyAndWait(action.to, { marbleClass: 'marble-entering' });
-        break;
-
-      case 'move':
-        const steps = this.calculateActionsMove(action);
-        // On utilise une boucle for...of pour attendre chaque étape
-        for (const step of steps) {
-          // 1. On déplace la donnée du pion d'une seule case
+    const animateSingleMove = async (a: Action) => {
+      const t = a.type as ActionType;
+      if (t === 'move') {
+        for (const step of this.calculateActionsMove(a)) {
           this.updateMarblePosition(step);
-          // 2. On attend que l'animation de cette case se termine
           await applyAndWait(step.to, { marbleClass: 'marble-moving' });
         }
-        break;
-
-      case 'capture':
-        const captureSteps = this.calculateActionsMove(action);
-
-        // 1. Déplacement case par case jusqu'à l'avant-dernière case
+      } else if (t === 'capture') {
+        const captureSteps = this.calculateActionsMove(a);
         for (let i = 0; i < captureSteps.length - 1; i++) {
-          const step = captureSteps[i];
+          const step = captureSteps[i]!;
           this.updateMarblePosition(step);
-          await applyAndWait(step.to, { marbleClass: 'marble-moving' });
+          await applyAndWait(step.to, { marbleClass: 'marble-moving' }, MARBLE_ANIMATION_DURATIONS.move);
         }
-
-        // 2. Le tout dernier saut : l'impact sur la case cible
-        const finalStep = captureSteps[captureSteps.length - 1];
-
-        // On met à jour la position de l'attaquant sur la case finale
+        const finalStep = captureSteps[captureSteps.length - 1]!;
         this.updateMarblePosition(finalStep);
-
-        // On déclenche les animations de l'attaquant (slam) et de la victime (éjection)
         await Promise.all([
           applyAndWait(finalStep.from, { marbleClass: 'marble-capturing' }),
           applyAndWait(finalStep.to, { marbleClass: 'marble-captured-exit', squareClass: 'square-impact' }),
         ]);
-        break;
+      } else if (t === 'promote') {
+        const startPos = START_POSITIONS[a.playerColor as MarbleColor];
+        const startPosIndex = MAIN_PATH.indexOf(startPos);
+        const beforeStartPos = MAIN_PATH[(startPosIndex - 1 + MAIN_PATH.length) % MAIN_PATH.length];
+        const mainPathAction: Action = { ...a, type: 'move', to: beforeStartPos };
+        for (const step of this.calculateActionsMove(mainPathAction)) {
+          this.updateMarblePosition(step);
+          await applyAndWait(step.to, { marbleClass: 'marble-moving' }, MARBLE_ANIMATION_DURATIONS.move);
+        }
+        this.updateMarblePosition({ ...a, from: beforeStartPos });
+        await applyAndWait(a.to, { marbleClass: 'marble-promoting', squareClass: 'square-promoting' });
+      }
+    };
 
+    switch (type) {
+      case 'enter': {
+        const enemyColor = this.getMarbleOnSquare(action.to);
+        const isCapture = enemyColor !== null && enemyColor !== action.playerColor;
+
+        if (isCapture) {
+          // Phase 1: enemy marble is still at action.to — eject it + shockwave on square
+          await applyAndWait(action.to, { marbleClass: 'marble-ejected', squareClass: 'square-enter-impact' }, MARBLE_EJECTED_DURATION_MS);
+          // Phase 2: entering marble drops into the now-empty square
+          this.updateMarblePosition(action);
+          await applyAndWait(action.to, { marbleClass: 'marble-entering' }, MARBLE_ANIMATION_DURATIONS.enter);
+          // Phase 3: impact squash on landing
+          await applyAndWait(action.to, { marbleClass: 'marble-enter-impact' }, ENTER_IMPACT_DURATION_MS);
+        } else {
+          this.updateMarblePosition(action);
+          await applyAndWait(action.to, { marbleClass: 'marble-entering' });
+        }
+        break;
+      }
+
+      case 'move':
+      case 'capture':
       case 'promote':
-        this.updateMarblePosition(action);
-        await applyAndWait(action.to, { marbleClass: 'marble-promoting', squareClass: 'square-promoting' });
+        // Animer le premier pion
+        await animateSingleMove(action);
+        // Split du 7 : animer aussi le second pion
+        if (action.splitFrom !== undefined && action.splitTo !== undefined) {
+          const splitAction: Action = {
+            ...action,
+            type: action.splitType ?? 'move',
+            from: action.splitFrom,
+            to: action.splitTo,
+            splitFrom: undefined,
+            splitTo: undefined,
+            splitType: undefined,
+          };
+          await animateSingleMove(splitAction);
+        }
         break;
 
       case 'swap': {
         const targetColor = this.displayedGameData()?.gameState.players.find(
           p => p.color !== action.playerColor && (p.marblePositions ?? []).includes(action.to)
         )?.color;
-        // Déplacer les deux billes avant l'animation
         this.updateMarblePosition(action);
         if (targetColor) {
           this.updateMarblePosition({ ...action, playerColor: targetColor, from: action.to, to: action.from });
@@ -357,6 +387,8 @@ export class BoardComponent implements OnInit, OnDestroy {
     root.style.setProperty('--anim-swap', `${MARBLE_ANIMATION_DURATIONS.swap}ms`);
     root.style.setProperty('--anim-promote', `${MARBLE_ANIMATION_DURATIONS.promote}ms`);
     root.style.setProperty('--anim-card-fly', `${CARD_FLY_DURATION_MS}ms`);
+    root.style.setProperty('--anim-enter-impact', `${ENTER_IMPACT_DURATION_MS}ms`);
+    root.style.setProperty('--anim-marble-ejected', `${MARBLE_EJECTED_DURATION_MS}ms`);
   }
 
   @HostListener('window:resize')
@@ -452,7 +484,8 @@ export class BoardComponent implements OnInit, OnDestroy {
 
   isSelectedMarble(index: number): boolean {
     return this.gameStateService.selectedMarblePosition() === index
-      || this.gameStateService.selectedSwapTargetPosition() === index;
+      || this.gameStateService.selectedSwapTargetPosition() === index
+      || this.gameStateService.selectedSplit7MarblePosition() === index;
   }
 
   /** Marble jouable avec la carte sélectionnée (à mettre en surbrillance). */
@@ -473,18 +506,28 @@ export class BoardComponent implements OnInit, OnDestroy {
     const selected = this.gameStateService.selectedMarblePosition();
     const card = this.gameStateService.selectedCard();
 
-    // Clic sur la bille déjà sélectionnée → désélectionner
+    // Clic sur la bille déjà sélectionnée → désélectionner tout
     if (selected === index) {
       this.gameStateService.selectedMarblePosition.set(null);
       this.gameStateService.selectedSwapTargetPosition.set(null);
+      this.gameStateService.selectedSplit7MarblePosition.set(null);
       return;
     }
 
-    // Clic sur une autre bille propre jouable → changer directement la sélection
+    // 7 phase 2 : clic sur un second pion candidat
+    if (card?.value === '7' && selected !== null && this.gameStateService.sevenFirstSteps() < 7 && this.isSelectableMarble(index)) {
+      const currentSplit = this.gameStateService.selectedSplit7MarblePosition();
+      this.gameStateService.selectedSplit7MarblePosition.set(currentSplit === index ? null : index);
+      return;
+    }
+
+    // Clic sur une autre bille propre jouable → changer le premier pion sélectionné
     const playableOwn = this.gameStateService.playableOwnMarbles();
     if (playableOwn !== null && playableOwn.has(index)) {
       this.gameStateService.selectedMarblePosition.set(index);
       this.gameStateService.selectedSwapTargetPosition.set(null);
+      this.gameStateService.selectedSplit7MarblePosition.set(null);
+      if (card?.value === '7') this.gameStateService.sevenFirstSteps.set(7);
       return;
     }
 

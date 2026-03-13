@@ -1,0 +1,227 @@
+================================================================================
+KEEZEN (TOCK) — TODO LIST
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+BUG 1: Start position blocking — wrong owner check
+────────────────────────────────────────────────────────────────────────────────
+File: packages/shared/src/move-validator.ts — pathIsClear() (~line 244)
+
+A marble occupying a start position should only block other marbles if it
+belongs to the OWNER of that start position. Currently, ANY marble on ANY start
+position blocks movement through it — even if the marble belongs to a different
+player than the start position's owner.
+
+Steps to fix:
+  1. In pathIsClear(), find the check:
+       if (isAnyStartPosition(pos) && pos !== ownStartPos && allMarbles.includes(pos))
+  2. Add an additional condition: only block if the marble at `pos` belongs to
+     the player who owns that start position.
+     - Use getPlayerColorByStartPosition(pos) (or equivalent lookup in
+       board-config.ts) to find the owner of the start position.
+     - Use the marble color at that position to determine which player it
+       belongs to (may require passing a marbles-by-color map to the function).
+  3. If the marble at `pos` does NOT belong to the start position's owner,
+     do not block — allow passage through it.
+
+Expected result: A marble of Player A sitting on Player B's start position does
+not prevent other players from passing through that square.
+
+────────────────────────────────────────────────────────────────────────────────
+BUG 2: Promotion animation — path to last MAIN_PATH square not animated
+────────────────────────────────────────────────────────────────────────────────
+File: frontend/src/app/home/components/board/board.component.ts — animateMarble()
+
+When a marble promotes (transitions from MAIN_PATH into the arrival zone), the
+animation currently jumps directly to the arrival square without showing the
+intermediate steps along MAIN_PATH that lead up to the entry point of the
+arrival zone.
+
+Context:
+  - Promotion is triggered when a marble crosses its player's START_POSITION
+    and has exactly the right number of steps to reach an arrival square.
+  - MAIN_PATH is a 56-element array defined in board-config.ts.
+  - The last MAIN_PATH square before promotion is the square just before the
+    marble leaves MAIN_PATH to enter the arrival zone.
+
+Steps to fix:
+  1. In animateMarble(), in the 'promote' case, before animating to the
+     arrival square (action.to), first animate the marble along MAIN_PATH
+     from action.from to the last MAIN_PATH square it crosses.
+     - Reuse the step-by-step interpolation already used for 'move' actions
+       in calculateActionsMove().
+  2. After the MAIN_PATH segment animation completes, animate the marble from
+     the last MAIN_PATH square to the arrival square (action.to) using the
+     existing promote animation class (marblePromote, 1000ms).
+  3. The total promote animation = MAIN_PATH steps animation + final arrival
+     step animation.
+
+────────────────────────────────────────────────────────────────────────────────
+BUG 3: Capture animation — movement steps too fast, impact too short
+────────────────────────────────────────────────────────────────────────────────
+Files:
+  - packages/shared/src/constants.ts — MARBLE_ANIMATION_DURATIONS
+  - frontend/src/app/home/components/board/board.component.scss — marbleSlam,
+    marbleKnockout, shockwaveSquare keyframes
+
+Context:
+  The capture sequence has two distinct phases:
+    Phase 1 — Movement: the attacker slides step-by-step toward the target
+      square. Each step uses MARBLE_ANIMATION_DURATIONS.move (200ms).
+      Currently these steps are NOT using the standard move duration — they are
+      too fast compared to regular move animations.
+    Phase 2 — Impact: the capture impact animation (marbleSlam on attacker,
+      marbleKnockout on victim, shockwaveSquare on square). Currently 250ms,
+      which is too short — the impact feels instant and is barely visible.
+
+Steps to fix:
+  1. Phase 1 — Movement steps before capture:
+     - Ensure each intermediate step of the attacker's path uses
+       MARBLE_ANIMATION_DURATIONS.move (200ms), identical to a regular move.
+     - In board.component.ts, verify that calculateActionsMove() (or equivalent)
+       is called for capture actions and applies the same per-step timing as
+       for 'move' type actions.
+  2. Phase 2 — Capture impact animation:
+     - In constants.ts, increase MARBLE_ANIMATION_DURATIONS.capture to ~800ms.
+     - Ensure the CSS keyframe durations for marbleSlam, marbleKnockout, and
+       shockwaveSquare in board.component.scss match this new value.
+       (They may be hardcoded — sync them with the constant or parameterize
+       via a CSS custom property.)
+
+────────────────────────────────────────────────────────────────────────────────
+BUG 4: Enter + capture — missing impact animation
+────────────────────────────────────────────────────────────────────────────────
+File: frontend/src/app/home/components/board/board.component.ts — animateMarble()
+File: frontend/src/app/home/components/board/board.component.scss — new keyframes
+
+When a player plays an Ace or King to enter their marble from HOME onto their
+start position AND an enemy marble is already on that start position, the
+backend correctly captures the enemy (sends it to its home zone), but the
+frontend animation only shows the entering marble's drop animation
+('marble-entering' class). The impact must be conveyed with dedicated animations.
+
+Context:
+  - Action type for this scenario is 'enter'.
+  - The enemy marble is implicitly captured: it is moved to an empty home
+    position in updateMarblePositions() (game.ts).
+  - The desired effect: the entering marble drops from above like a heavy object,
+    triggering a shockwave/dust burst on landing, while the enemy marble is
+    violently ejected from the square. These are NEW animations, distinct from
+    the existing marbleSlam/marbleKnockout used for regular captures.
+
+Steps to fix:
+
+  1. Detect the capture-on-enter case:
+     - In animateMarble(), in the 'enter' case, check whether action.to is
+       occupied by an enemy marble before calling updateMarblePosition(action).
+     - If yes, run the standard 'marble-entering' drop animation first, then
+       immediately trigger the impact animations below.
+
+  2. Create new CSS keyframes in board.component.scss:
+
+     a. marbleEnterImpact (applied to the entering marble / the square):
+        - Simulate a heavy impact: quick downward squash on landing, then
+          rebound to normal scale. A radial dust/shockwave ring expands outward
+          from the square center and fades out.
+        - Example: scale(1) → scale(1.2, 0.7) at 20% → scale(0.95, 1.05) at
+          50% → scale(1) at 100%, combined with an expanding + fading
+          box-shadow or ::after pseudo-element for the dust ring.
+
+     b. marbleEjected (applied to the captured enemy marble):
+        - The marble is knocked away: it rapidly translates in a direction
+          (e.g., away from center of the board, or simply upward-and-sideways),
+          shrinks, and fades out before its position is updated to HOME.
+        - Example: translate(0,0) opacity(1) scale(1) → translate(30px,-40px)
+          scale(0.5) opacity(0) over ~400ms with ease-in timing.
+
+  3. Sequence in animateMarble() for 'enter' with capture:
+     a. Run 'marble-entering' drop animation on action.to (existing).
+     b. Immediately after landing: apply marbleEnterImpact to the square/marble
+        and marbleEjected to the enemy marble simultaneously.
+     c. Once marbleEjected completes, call updateMarblePosition(action) to
+        snap the enemy marble to its new HOME position.
+
+  4. Add duration for the new animations to MARBLE_ANIMATION_DURATIONS in
+     constants.ts (e.g., enterImpact: 500ms, marbleEjected: 400ms).
+
+────────────────────────────────────────────────────────────────────────────────
+FEATURE 5: Card 7 — improve step-split UI
+────────────────────────────────────────────────────────────────────────────────
+Files:
+  - frontend/src/app/home/services/game-state.service.ts — sevenFirstSteps
+    signal, playableMarblePositions computed (~line 50)
+  - frontend/src/app/home/components/board/board.component.ts — card/marble
+    selection flow
+  - frontend/src/app/home/components/table/table.component.html/ts — hand UI
+
+Context:
+  - Card 7 allows splitting 7 steps between two marbles (1–6 for the first,
+    remainder for the second). Logic is correct in getLegalSplit7Action().
+  - Current flow: select card 7 → click first marble → adjust sevenFirstSteps
+    (1–6) → click second marble. The step adjustment step is impractical
+    because it is not visually guided.
+
+Steps to improve:
+  1. After the player selects their first marble (step-split phase 1):
+     - Compute and display all valid step allocations (1 through 6) for that
+       marble. For each allocation i, verify that:
+         a. The first marble can legally move i steps.
+         b. At least one other marble can legally move (7 - i) steps.
+     - Only show allocations that satisfy both conditions.
+  2. Present the valid allocations as clickable step-count buttons (e.g., "1",
+     "2", ... "6") displayed near the selected marble or in the UI panel.
+  3. Once the player selects an allocation:
+     - Lock sevenFirstSteps to that value.
+     - Highlight the valid second marbles for the remaining (7 - steps) moves.
+  4. (Optional but recommended) Show a live preview (see FEATURE 6) of the
+     first marble's destination as the player hovers over each step option.
+
+────────────────────────────────────────────────────────────────────────────────
+FEATURE 6: Board movement preview — highlight path on marble selection
+────────────────────────────────────────────────────────────────────────────────
+Files:
+  - frontend/src/app/home/components/board/board.component.ts — square/marble
+    rendering, signal-derived state
+  - frontend/src/app/home/components/board/board.component.scss — add new CSS
+    class for preview squares
+  - packages/shared/src/move-validator.ts — getPositionAfterMove() (line 46),
+    MAIN_PATH from board-config.ts
+
+Context:
+  - Currently, when a card and a marble are selected, the board shows which
+    marbles are playable (via marble-selectable class) but does NOT show where
+    the marble will move or which squares it will pass through.
+  - getPositionAfterMove(fromPosition, steps) is already available and returns
+    the destination index given a starting index and step count.
+  - MAIN_PATH is the ordered list of 56 board indices defining the race track.
+
+Steps to implement:
+  1. Compute the preview path:
+     - When a card is selected AND a playable marble is hovered or selected
+       by the player, compute the list of intermediate MAIN_PATH squares
+       between the marble's current position and its destination.
+     - For a standard move of N steps from index i: the squares to highlight
+       are MAIN_PATH[(i + 1) % 56], MAIN_PATH[(i + 2) % 56], ...,
+       MAIN_PATH[(i + N) % 56].
+     - Handle edge cases: promotion (path ends at arrival square), swap (show
+       both marbles' destinations), card 7 split (show first marble's path
+       after step selection).
+
+  2. Apply a CSS class (e.g., square-preview-path) to each intermediate
+     square in the board component template. Apply a distinct class (e.g.,
+     square-preview-destination) to the final destination square.
+
+  3. Add CSS styles in board.component.scss:
+     - square-preview-path: subtle highlight (e.g., soft glow or colored
+       border) showing the traversed squares.
+     - square-preview-destination: stronger highlight showing the landing
+       square.
+     - Ensure these styles do not conflict with existing selectable/selected
+       marble classes.
+
+  4. Clear the preview when:
+     - The player deselects the marble or card.
+     - An action is submitted.
+     - It is no longer the player's turn.
+
+================================================================================

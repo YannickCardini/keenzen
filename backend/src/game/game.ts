@@ -2,7 +2,7 @@ import { Deck } from "./deck.js";
 import { Player } from "./player.js";
 import { AiStrategy } from "./ai-strategy.js";
 import { HumanStrategy } from "./human-strategy.js";
-import { getLegalAction, findLegalMoveForCard, type LegalMoveContext } from '../utils/utils.js';
+import { getLegalAction, findLegalMoveForCard, getLegalSplit7Action, MAIN_PATH, type LegalMoveContext } from '../utils/utils.js';
 import type { GameMessenger } from './game-messenger.js';
 import {
     getHomePositions,
@@ -97,7 +97,7 @@ export class Game {
 
     private async playOneTurn() {
         const player = this.players[this.currentPlayerIndex]!;
-        const allMarbles = this.players.flatMap(p => p.marblePositions);
+        const marblesByColor = Object.fromEntries(this.players.map(p => [p.color, [...p.marblePositions]])) as Record<MarbleColor, number[]>;
 
         console.log(`🔄 Tour ${this.turn} (Manche ${this.round}) — ${player.name} (${player.color})`);
 
@@ -109,7 +109,7 @@ export class Game {
         this.pendingTimeoutAction = null;
         const move = player.handEmpty()
             ? { type: 'pass' as const, from: 0, to: 0, cardPlayed: null, playerColor: player.color }
-            : await this.waitForActionOrTimeout(player, allMarbles);
+            : await this.waitForActionOrTimeout(player, marblesByColor);
         const isTimeout = this.pendingTimeoutAction !== null;
         this.pendingTimeoutAction = null;
         const enrichedMove: Action = { ...move, playerColor: player.color };
@@ -207,11 +207,12 @@ export class Game {
      * Retourne null si l'action est illégale.
      */
     private validateHumanAction(action: Action, player: Player): Action | null {
-        const allMarbles = this.players.flatMap(p => p.marblePositions);
+        const marblesByColor = Object.fromEntries(this.players.map(p => [p.color, [...p.marblePositions]])) as Record<MarbleColor, number[]>;
         const ctx: LegalMoveContext = {
             ownMarbles: [...player.marblePositions],
-            allMarbles,
+            allMarbles: Object.values(marblesByColor).flat(),
             playerColor: player.color,
+            marblesByColor,
         };
 
         if (action.type === 'pass') {
@@ -229,6 +230,17 @@ export class Game {
         const card = action.cardPlayed?.[0];
         if (!card) return null;
         if (!player.cards.some(c => c.id === card.id)) return null;
+
+        // Split 7 : le client envoie from/to pour le premier pion et splitFrom pour le second.
+        if (card.value === '7' && action.splitFrom !== undefined && action.splitFrom !== 0) {
+            const fromIdx = MAIN_PATH.indexOf(action.from);
+            const toIdx   = MAIN_PATH.indexOf(action.to);
+            if (fromIdx === -1 || toIdx === -1) return null;
+            const steps1 = (toIdx - fromIdx + MAIN_PATH.length) % MAIN_PATH.length;
+            const serverAction = getLegalSplit7Action(card, action.from, steps1, action.splitFrom, ctx);
+            if (!serverAction) return null;
+            return { ...serverAction, playerColor: player.color };
+        }
 
         // Le serveur recalcule lui-même l'action légale à partir de card + from.
         // Pour le Jack, on passe aussi action.to (la cible du swap choisie par le client).
@@ -248,11 +260,12 @@ export class Game {
      * `pass` est réservé à la main vide, géré en amont dans playOneTurn.
      */
     private computeFallbackAction(player: Player): Action {
-        const allMarbles = this.players.flatMap(p => p.marblePositions);
+        const marblesByColor = Object.fromEntries(this.players.map(p => [p.color, [...p.marblePositions]])) as Record<MarbleColor, number[]>;
         const ctx: LegalMoveContext = {
             ownMarbles: [...player.marblePositions],
-            allMarbles,
+            allMarbles: Object.values(marblesByColor).flat(),
             playerColor: player.color,
+            marblesByColor,
         };
 
         for (const card of player.cards) {
@@ -267,7 +280,7 @@ export class Game {
         return { type: 'discard', from: 0, to: 0, cardPlayed: [...player.cards], playerColor: player.color };
     }
 
-    private waitForActionOrTimeout(player: Player, allMarbles: number[]): Promise<Action> {
+    private waitForActionOrTimeout(player: Player, marblesByColor: Record<MarbleColor, number[]>): Promise<Action> {
         return new Promise<Action>((resolve) => {
             let settled = false;
 
@@ -283,7 +296,7 @@ export class Game {
                 resolve(fallback);
             }, TURN_DURATION_MS + TURN_TIMEOUT_OFFSET_MS);
 
-            player.getAction(allMarbles).then((action) => {
+            player.getAction(marblesByColor).then((action) => {
                 if (settled) return;
                 settled = true;
                 clearTimeout(timer);
@@ -328,11 +341,12 @@ export class Game {
     /** Vrai si le joueur courant n'a aucun coup légal (peut défausser). */
     private computeCanDiscard(player: Player): boolean {
         if (player.handEmpty()) return false;
-        const allMarbles = this.players.flatMap(p => p.marblePositions);
+        const marblesByColor = Object.fromEntries(this.players.map(p => [p.color, [...p.marblePositions]])) as Record<MarbleColor, number[]>;
         const ctx: LegalMoveContext = {
             ownMarbles: [...player.marblePositions],
-            allMarbles,
+            allMarbles: Object.values(marblesByColor).flat(),
             playerColor: player.color,
+            marblesByColor,
         };
         return !player.cards.some(card => findLegalMoveForCard(card, ctx) !== null);
     }
@@ -398,7 +412,6 @@ export class Game {
                 // 2. Renvoyer le pion capturé à sa base
                 for (const victim of this.players) {
                     if (victim === player) continue;
-
                     const victimIndex = victim.marblePositions.indexOf(move.to);
                     if (victimIndex !== -1) {
                         const homePositions = getHomePositions(victim.color);
@@ -406,6 +419,26 @@ export class Game {
                         if (emptyHome !== undefined) {
                             victim.marblePositions[victimIndex] = emptyHome;
                             console.log(`💀 ${player.name} a capturé un pion de ${victim.name}! Retour à la base (${emptyHome}).`);
+                        }
+                    }
+                }
+
+                // 3. Split du 7 : appliquer aussi le second mouvement
+                if (move.splitFrom !== undefined && move.splitTo !== undefined) {
+                    const splitIdx = player.marblePositions.indexOf(move.splitFrom);
+                    if (splitIdx !== -1) {
+                        player.marblePositions[splitIdx] = move.splitTo;
+                    }
+                    for (const victim of this.players) {
+                        if (victim === player) continue;
+                        const victimIndex = victim.marblePositions.indexOf(move.splitTo);
+                        if (victimIndex !== -1) {
+                            const homePositions = getHomePositions(victim.color);
+                            const emptyHome = homePositions.find(pos => !victim.marblePositions.includes(pos));
+                            if (emptyHome !== undefined) {
+                                victim.marblePositions[victimIndex] = emptyHome;
+                                console.log(`💀 Split 7 — ${player.name} a capturé un pion de ${victim.name}! Retour à la base (${emptyHome}).`);
+                            }
                         }
                     }
                 }

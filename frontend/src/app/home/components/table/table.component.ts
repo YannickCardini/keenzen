@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { TockCardComponent } from 'src/app/shared/tock-card.component';
 import type { Card, MarbleColor } from '@keezen/shared';
+import { getValidSevenStepsForMarble, getPositionAfterMove, type LegalMoveContext } from '@keezen/shared';
 import { Subscription } from 'rxjs';
 
 enum TURN_PHASE {
@@ -18,6 +19,7 @@ enum TURN_PHASE {
   CARD = "Choose a card",
   MARBLE = "Choose a Marble",
   SWAP_TARGET = "Choose a target marble",
+  SEVEN_SPLIT = "Choose a second marble",
   WAIT = "Wait for your turn",
   CONFIRM = "Confirm your move",
 }
@@ -48,6 +50,32 @@ enum TURN_PHASE {
     this.gameStateService.selectedMarblePosition() !== null &&
     !this.gameStateService.canPlay()
   );
+
+  /** Vrai quand le compteur de pas du 7 doit être affiché. */
+  showSevenStepCounter = computed(() =>
+    this.gameStateService.isMyTurn() &&
+    this.gameStateService.selectedCard()?.value === '7' &&
+    this.gameStateService.selectedMarblePosition() !== null
+  );
+
+  /** Pas valides (1–7) pour le premier pion sélectionné avec le 7. */
+  validSevenSteps = computed<number[]>(() => {
+    const marble1 = this.gameStateService.selectedMarblePosition();
+    if (marble1 === null) return [];
+    const myColor = this.gameStateService.myPlayerColor();
+    const data = this.gameStateService.data();
+    if (!myColor || !data) return [];
+    const player = data.gameState.players.find(p => p.color === myColor);
+    if (!player) return [];
+    const marblesByColor = Object.fromEntries(data.gameState.players.map(p => [p.color, p.marblePositions])) as Record<MarbleColor, number[]>;
+    const ctx: LegalMoveContext = {
+      ownMarbles: player.marblePositions,
+      allMarbles: data.gameState.players.flatMap(p => p.marblePositions),
+      playerColor: myColor,
+      marblesByColor,
+    };
+    return getValidSevenStepsForMarble(marble1, ctx);
+  });
 
   /** Bannière "temps écoulé" : couleur du joueur concerné, null = masqué */
   timeoutBannerColor = signal<MarbleColor | null>(null);
@@ -130,6 +158,12 @@ enum TURN_PHASE {
       this.gameStateService.selectedMarblePosition() !== null
     )
       turnPhaseText = TURN_PHASE.SWAP_TARGET;
+    else if (
+      this.gameStateService.selectedCard()?.value === '7' &&
+      this.gameStateService.selectedMarblePosition() !== null &&
+      this.gameStateService.sevenFirstSteps() < 7
+    )
+      turnPhaseText = TURN_PHASE.SEVEN_SPLIT;
     this.turnPhase.set(turnPhaseText);
   }
 
@@ -173,6 +207,29 @@ enum TURN_PHASE {
     }, 4000);
   }
 
+  // ── 7 step counter ─────────────────────────────────────────────
+  decrementSevenSteps(): void {
+    const valid = this.validSevenSteps();
+    const current = this.gameStateService.sevenFirstSteps();
+    const idx = valid.indexOf(current);
+    if (idx > 0) {
+      this.gameStateService.sevenFirstSteps.set(valid[idx - 1]!);
+      this.gameStateService.selectedSplit7MarblePosition.set(null);
+      this.updateTurnPhase();
+    }
+  }
+
+  incrementSevenSteps(): void {
+    const valid = this.validSevenSteps();
+    const current = this.gameStateService.sevenFirstSteps();
+    const idx = valid.indexOf(current);
+    if (idx < valid.length - 1) {
+      this.gameStateService.sevenFirstSteps.set(valid[idx + 1]!);
+      this.gameStateService.selectedSplit7MarblePosition.set(null);
+      this.updateTurnPhase();
+    }
+  }
+
   // ── Interactions ───────────────────────────────────────────────
   onCardSelected(index: number): void {
     if (!this.gameStateService.isMyTurn()) {
@@ -189,6 +246,8 @@ enum TURN_PHASE {
       this.selectedCardIndex.set(null);
       this.gameStateService.selectedCard.set(null);
       this.gameStateService.selectedMarblePosition.set(null);
+      this.gameStateService.sevenFirstSteps.set(7);
+      this.gameStateService.selectedSplit7MarblePosition.set(null);
       this.turnPhase.set(TURN_PHASE.CARD);
     } else {
       const card = this.getPlayerHand()[index] ?? null;
@@ -196,6 +255,8 @@ enum TURN_PHASE {
       this.gameStateService.selectedCard.set(card);
       this.gameStateService.selectedMarblePosition.set(null);
       this.gameStateService.selectedSwapTargetPosition.set(null);
+      this.gameStateService.sevenFirstSteps.set(7);
+      this.gameStateService.selectedSplit7MarblePosition.set(null);
       this.turnPhase.set(TURN_PHASE.MARBLE);
     }
   }
@@ -241,19 +302,38 @@ enum TURN_PHASE {
       });
       this.gameStateService.clearLocalHand();
     } else {
-      // Coup normal : le serveur calcule type et to à partir de card + from
-      // Pour le Jack, on inclut la cible du swap dans `to`
       const card = this.gameStateService.selectedCard()!;
-      const to = card.value === 'J'
-        ? (this.gameStateService.selectedSwapTargetPosition() ?? 0)
-        : 0;
-      this.gameStateService.playAction({
-        type: 'move',   // placeholder
-        from: this.gameStateService.selectedMarblePosition()!,
-        to,
-        cardPlayed: [card],
-        playerColor: myColor,
-      });
+      const from1 = this.gameStateService.selectedMarblePosition()!;
+
+      if (card.value === '7' && this.gameStateService.sevenFirstSteps() < 7) {
+        // Split du 7 : encoder les deux destinations
+        const steps1 = this.gameStateService.sevenFirstSteps();
+        const to1 = getPositionAfterMove(from1, steps1) ?? 0;
+        const from2 = this.gameStateService.selectedSplit7MarblePosition()!;
+        const to2 = getPositionAfterMove(from2, 7 - steps1) ?? 0;
+        this.gameStateService.playAction({
+          type: 'move',
+          from: from1,
+          to: to1,
+          splitFrom: from2,
+          splitTo: to2,
+          cardPlayed: [card],
+          playerColor: myColor,
+        });
+      } else {
+        // Coup normal : le serveur calcule type et to à partir de card + from
+        // Pour le Jack, on inclut la cible du swap dans `to`
+        const to = card.value === 'J'
+          ? (this.gameStateService.selectedSwapTargetPosition() ?? 0)
+          : 0;
+        this.gameStateService.playAction({
+          type: 'move',
+          from: from1,
+          to,
+          cardPlayed: [card],
+          playerColor: myColor,
+        });
+      }
     }
 
     this.selectedCardIndex.set(null);
