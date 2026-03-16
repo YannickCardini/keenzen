@@ -1,5 +1,5 @@
 import type { Action, Card } from '@keezen/shared';
-import { findLegalMoveForCard, sleep, type LegalMoveContext } from '../utils/utils.js';
+import { findLegalMoveForCard, getLegalAction, sleep, type LegalMoveContext } from '../utils/utils.js';
 import type { PlayerStrategy } from './player-strategy.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -9,7 +9,7 @@ import type { PlayerStrategy } from './player-strategy.js';
 //  2. Q    → avance de 12, très efficace
 //  3. 10 … → grands déplacements en premier
 //
-// Cartes non gérées pour l'instant (J : swap, 7 : split, 4 : recul) →
+// Cartes non gérées pour l'instant (7 : split, 4 : recul) →
 // getLegalAction retourne null pour leurs comportements spéciaux, donc l'IA
 // les passera naturellement si aucun coup standard n'est trouvable.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +41,22 @@ export class AiStrategy implements PlayerStrategy {
             }
         }
 
-        // 🚶 Pass 2 : coups normaux (enter, move)
+        // 🔄 Pass 2 : J card swap
+        const jCard = hand.find(c => c.value === 'J');
+        if (jCard) {
+            const opponentMarbles = ctx.allMarbles.filter(pos => !ctx.ownMarbles.includes(pos));
+            for (const ownMarble of ctx.ownMarbles) {
+                for (const opponentMarble of opponentMarbles) {
+                    const action = getLegalAction(jCard, ownMarble, ctx, opponentMarble);
+                    if (action) {
+                        console.log(`🔄 IA joue J${jCard.suit} → swap [${ownMarble} ↔ ${opponentMarble}]`);
+                        return action;
+                    }
+                }
+            }
+        }
+
+        // 🚶 Pass 3 : coups normaux (enter, move)
         for (const targetValue of AI_CARD_PRIORITY) {
             const card = hand.find(c => c.value === targetValue);
             if (!card) continue;

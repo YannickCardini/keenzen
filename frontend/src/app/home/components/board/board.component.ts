@@ -269,7 +269,7 @@ export class BoardComponent implements OnInit, OnDestroy {
       if (t === 'move') {
         for (const step of this.calculateActionsMove(a)) {
           this.updateMarblePosition(step);
-          await applyAndWait(step.to, { marbleClass: 'marble-moving' });
+          await applyAndWait(step.to, { marbleClass: 'marble-moving' }, MARBLE_ANIMATION_DURATIONS.move);
         }
       } else if (t === 'capture') {
         const captureSteps = this.calculateActionsMove(a);
@@ -306,6 +306,8 @@ export class BoardComponent implements OnInit, OnDestroy {
         if (isCapture) {
           // Phase 1: enemy marble is still at action.to — eject it + shockwave on square
           await applyAndWait(action.to, { marbleClass: 'marble-ejected', squareClass: 'square-enter-impact' }, MARBLE_EJECTED_DURATION_MS);
+          // Remove the captured enemy from the display so the square is empty before the new marble enters
+          this.removeMarbleFromSquare(action.to, enemyColor);
           // Phase 2: entering marble drops into the now-empty square
           this.updateMarblePosition(action);
           await applyAndWait(action.to, { marbleClass: 'marble-entering' }, MARBLE_ANIMATION_DURATIONS.enter);
@@ -476,6 +478,21 @@ export class BoardComponent implements OnInit, OnDestroy {
         ...current,
         gameState: { ...current.gameState, players: updatedPlayers }
       };
+    });
+  }
+
+  /** Remove a marble of the given color from a specific board square (sets its position to 0). */
+  private removeMarbleFromSquare(position: number, color: MarbleColor): void {
+    this.displayedGameData.update(current => {
+      if (!current) return current;
+      const updatedPlayers = current.gameState.players.map(p => {
+        if (p.color === color) {
+          const marblePositions = p.marblePositions.map(pos => pos === position ? 0 : pos);
+          return { ...p, marblePositions };
+        }
+        return p;
+      });
+      return { ...current, gameState: { ...current.gameState, players: updatedPlayers } };
     });
   }
 

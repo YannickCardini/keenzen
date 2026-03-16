@@ -124,9 +124,12 @@ export function getLegalAction(
         if (marblePosition === startPos) return null;
 
         const opponentMarbles = allMarbles.filter(pos => !ownMarbles.includes(pos));
-        const swappableTargets = opponentMarbles.filter(pos =>
-            !isAnyStartPosition(pos) && !isOnAnyArrivalPosition(pos) && !isOnAnyHomePosition(pos)
-        );
+        const swappableTargets = opponentMarbles.filter(pos => {
+            const marbleColor = (Object.entries(ctx.marblesByColor) as [MarbleColor, number[]][])
+                .find(([, positions]) => positions.includes(pos))?.[0];
+            const isOnOwnStart = marbleColor !== undefined && getStartPosition(marbleColor) === pos;
+            return !isOnOwnStart && !isOnAnyArrivalPosition(pos) && !isOnAnyHomePosition(pos);
+        });
 
         if (targetPosition !== undefined) {
             if (!swappableTargets.includes(targetPosition)) return null;
@@ -233,6 +236,7 @@ function buildBackwardMoveAction(
 function startPositionBtwFromAndTo(from: number, to: number, playerColor: MarbleColor) {
     const startPosition = START_POSITIONS[playerColor];
     if (startPosition === from) return false;
+    if (startPosition === to) return true;
     let index = MAIN_PATH.indexOf(from);
     while (MAIN_PATH[index] !== to) {
         if (MAIN_PATH[index] === startPosition) return true;

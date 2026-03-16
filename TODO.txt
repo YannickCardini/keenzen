@@ -1,125 +1,55 @@
-## BUG — AI does not play the J (Jack / Swap) card
-**File:** `backend/src/game/ai-strategy.ts`
+## Bug 1 — Incorrect preview destination when card "7" results in a promotion
 
-The AI currently discards the J card instead of playing it. The J card allows
-swapping one of the AI's marbles with an opponent's marble.
+**Files involved:**
+- `frontend/src/app/home/components/board/board.component.ts` — `previewInfo` computed signal (lines 107–119)
+- `packages/shared/src/move-validator.ts` — `buildMoveAction` (currently unexported)
 
-Steps to implement:
-- In `ai-strategy.ts`, add a pass that evaluates J card actions.
-- For each opponent marble (not on a START_POSITION of its own color, not in
-  ARRIVAL_POSITIONS, not in HOME_POSITIONS), check if swapping with one of the
-  AI's own eligible marbles constitutes a legal move using `getLegalAction()` in
-  `move-validator.ts`.
-- Prioritize swaps that benefit the AI (e.g., swap a marble close to winning with
-  an opponent far away, or rescue an AI marble that is exposed).
-- A basic non-strategic implementation is acceptable as a first step: pick any
-  legal swap target randomly rather than discarding the card.
+**Description:**
+When the player selects the "7" card and has already chosen the step count for the first marble (i.e., `sevenFirstSteps < 7`),
+the preview path destination is computed by calling `getPositionAfterMove(focusedMarble, stepsForFocused)`,
+which always returns a position along `MAIN_PATH`. If the move would actually result in a **promotion**
+(the marble crosses its own start position and enters the arrival zone),
+`getPositionAfterMove` returns the wrong square — the raw MAIN_PATH position after the start, instead of the correct arrival zone square.
 
+For all other cards (non-7), `getLegalAction()` is called, which internally calls `buildMoveAction()` and correctly detects the promote condition,
+returning an action of type `'promote'` with `to` pointing to the arrival zone. The 7-split preview branch bypasses this logic entirely.
 
----
+**Steps to fix:**
 
+1. **Export a new helper function** from `packages/shared/src/move-validator.ts`:
+   - Create and export a function `getActionForSteps(card: Card, from: number, steps: number, ctx: LegalMoveContext): Action | null` that is a thin wrapper calling `buildMoveAction(card, from, steps, ctx)` (currently private).
+   - This function returns the correct `Action` including `type: 'promote'` and the actual arrival zone square as `to` when applicable.
 
-## BUG — Swap (J card) incorrectly restricted on other players' START_POSITIONS
-**File:** `packages/shared/src/move-validator.ts`
-
-Currently, a marble cannot be swapped if it sits on ANY `START_POSITION` on the
-board. This is too restrictive. The rule should be:
-
-> A marble CANNOT be the target of a swap if and only if it is on its OWN
-> player's START_POSITION (i.e., the start position matching its color).
-> Being on another player's start position must NOT prevent it from being swapped.
-
-Steps to fix:
-- Locate the swap validation logic in `move-validator.ts` (the check that
-  prevents swapping marbles on start positions).
-- Replace the blanket `isStartPosition()` check with a per-color check:
-  only reject the target marble if `getStartPosition(targetMarble.color) ===
-  targetMarble.position`.
-- Confirm with `board-config.ts` which helper function or constant lists each
-  player's specific start position.
-- Add test cases: marble on own start → swap rejected; marble on another
-  player's start → swap allowed.
-
+2. **Update the preview logic** in `board.component.ts`, `previewInfo` computed signal, in the `card.value === '7'` branch where `steps1 < 7 && marble1 !== null`:
+   - Replace the call to `getPositionAfterMove(focusedMarble, stepsForFocused)` and the manual construction of a `'move'` action with a call to the new `getActionForSteps` function.
+   - Pass a dummy card (e.g., `{ id: '__preview__', value: '7', suit: '♠' }`), the focused marble position, the computed `stepsForFocused`, and the current context `ctx`.
+   - Use the returned action (which may be a `'move'` or `'promote'`) in the existing `computePreviewFromAction(action)` call.
 
 ---
 
+## Bug 2 — Marble on its own start position can be illegally captured by a backward move
 
-## BUG — Animation glitch when entering a marble that simultaneously captures an enemy
-**File:** `frontend/src/app/home/components/board/board.component.ts`
+**Files involved:**
+- `packages/shared/src/move-validator.ts` — `buildBackwardMoveAction` (lines 204–234) and `pathIsClear` (lines 256–287)
 
-When a player plays an A or K card to bring a marble out of HOME and their
-START_POSITION is already occupied by an enemy marble, two things happen at once:
-the new marble enters AND the enemy marble is captured (sent back to its home).
-The current animation for this combined "enter + capture" action looks broken.
+**Description:**
+A marble standing on its **own** start position (i.e., the marble's color matches the start position's color) is supposed to be **invincible**
+— it cannot be captured or passed through by other players. This rule is already correctly enforced for **forward** moves:
+`pathIsClear()` checks every intermediate square and the destination, and returns `false` if a marble is resting on its own start position.
 
-Steps to fix:
-- In `board.component.ts`, inside `runActionSequence()`, locate the handling
-  for the `enter` action type.
-- Currently the enter animation and the capture animation may be running
-  simultaneously or in the wrong order.
-- Fix the sequence:
-  1. Show the enemy marble disappearing from the start position (captured).
-  2. Then animate the new marble appearing/entering on the start position.
-- Review animation duration constants in `packages/shared/src/constants.ts`
-  (e.g., `ENTER_DURATION`, `CAPTURE_DURATION`) to ensure timing feels correct
-  and consistent with other animations.
+However, `buildBackwardMoveAction()` (used when card "4" is played, moving backward 4 squares) **does not perform any path checks**. It only checks whether the destination `to` belongs to the current player's own marbles. It does not check:
+- Whether the destination `to` is another player's start position with that player's marble on it (should be uncapturable).
+- Whether any **intermediate** square along the backward path is a start position with the owner's marble on it (should block passage).
 
+Note: a marble of color X standing on the start position of color Y (a different color)
+ has no special protection and can be captured normally — only a marble on its **own** color's start is protected.
 
+**Steps to fix:**
 
----
+1. **Add a destination check** in `buildBackwardMoveAction`, immediately after `if (ownMarbles.includes(to)) return null;`:
+   - If `to` is any player's start position (use `getStartPositionOwner(to)`), and that player's marble is currently at `to` (check `ctx.marblesByColor[owner].includes(to)`), then `return null` — the marble is invincible and the move is illegal.
 
-
-## BUG — Step-by-step animation for the 7 card is slower than other move animations
-**File:** `frontend/src/app/home/components/board/board.component.ts`
-**Reference:** `packages/shared/src/constants.ts`
-
-The target animation speed for marble movement is **200ms per square**, regardless
-of the card or move type. Currently, the step-by-step animation played when the
-7 card is used (split between two marbles) runs at a different (slower) speed.
-
-Steps to fix:
-- In `board.component.ts`, find where the 7-card split animation is handled
-  inside `runActionSequence()`.
-- Ensure each individual step of the 7-card animation uses the same duration
-  constant as all other step animations (should be the `MOVE_DURATION` constant
-  from `constants.ts`, currently set to 200ms).
-- Check whether a different constant or a hardcoded value is being used for
-  the 7-card case and replace it with the shared constant.
-- Verify that all move types (capture, backward, split, promote, enter) use
-  the same per-step duration of 200ms.
-
-
----
-
-
-## BUG — Promotion move incorrectly rejected as illegal for the last marble entering ARRIVAL
-**File:** `packages/shared/src/move-validator.ts`
-
-Reproduction steps:
-1. Play as red.
-2. Have only one marble remaining outside ARRIVAL_POSITIONS.
-3. That marble is positioned such that the exact remaining distance to the
-   last ARRIVAL slot requires a specific card (e.g., marble at main-path
-   position 7 needs a 2 card to land on ARRIVAL position index 38).
-4. The player holds that exact card.
-5. Expected: The move is valid and playable.
-6. Actual: The move is rejected as illegal, all cards are discarded.
-
-Root cause (suspected):
-- `getLegalAction()` or the promote path calculation in `move-validator.ts`
-  may not correctly compute the remaining distance when transitioning from the
-  main path into the ARRIVAL zone.
-- The promotion logic must account for the fact that once a marble crosses its
-  own START_POSITION, subsequent steps go into ARRIVAL_POSITIONS (indexed
-  separately from MAIN_PATH).
-- Check the boundary condition when a marble is already on the main path near
-  the start position and a small card value would land it exactly on the last
-  ARRIVAL slot.
-
-Steps to fix:
-- Trace `getLegalAction()` for a promote scenario to find where the distance
-  calculation fails.
-- Ensure the promote path correctly maps remaining steps onto ARRIVAL_POSITIONS
-  indices without off-by-one errors.
-- Verify the fix works for all four player colors (each has their own
-  START_POSITION and ARRIVAL_POSITIONS layout in `board-config.ts`).
+2. **Add intermediate square checks** in `buildBackwardMoveAction`:
+   - Before computing `to`, iterate over the intermediate squares (steps 1 to `steps - 1`) going backward from `from` using `getPositionAfterBackwardMove`.
+   - For each intermediate square, apply the same check: if it is a start position and the owning player's marble is there, `return null` — the path is blocked.
+   - Alternatively, extract this logic into a new `pathIsClearBackward(from, steps, playerColor, allMarbles, marblesByColor)` helper function (mirroring the existing `pathIsClear` for forward moves) and call it from `buildBackwardMoveAction`.
