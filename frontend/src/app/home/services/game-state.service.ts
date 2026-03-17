@@ -7,6 +7,7 @@ import {
   GameStateMessage,
   ActionPlayedMessage,
   ActionRejectedMessage,
+  GameEndedMessage,
   AnimationDoneMessage,
   TurnTimeoutMessage,
   PlayActionMessage,
@@ -29,6 +30,7 @@ export class GameStateService {
   // ── État serveur ──────────────────────────────────────────────────────────
   data = signal<GameStateMessage | null>(null);
   isConnected = signal(false);
+  winner = signal<MarbleColor | null>(null);
 
   // ── Identité du joueur local ──────────────────────────────────────────────
   /** Couleur du joueur humain local. null = mode spectateur (4 IA). */
@@ -289,6 +291,12 @@ export class GameStateService {
         case 'waitingForPlayers':
           console.log('⏳ En attente de joueurs :', (parsed as any).missing);
           break;
+
+        case 'gameEnded': {
+          const msg = parsed as GameEndedMessage;
+          this.winner.set(msg.winner);
+          break;
+        }
       }
     };
 

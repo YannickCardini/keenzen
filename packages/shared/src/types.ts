@@ -139,6 +139,12 @@ export interface ActionRejectedMessage {
   reason: string;
 }
 
+/** Envoyé par le serveur quand un joueur a gagné la partie */
+export interface GameEndedMessage {
+  type: 'gameEnded';
+  winner: MarbleColor;
+}
+
 /** Envoyé au créateur d'une room multi-device */
 export interface RoomCreatedMessage {
   type: 'roomCreated';
@@ -159,7 +165,8 @@ export type ServerMessage =
   | ActionPlayedMessage
   | ActionRejectedMessage
   | RoomCreatedMessage
-  | WaitingForPlayersMessage;
+  | WaitingForPlayersMessage
+  | GameEndedMessage;
 
 // ── Messages WebSocket — Client → Serveur ─────────────────────────────────────
 

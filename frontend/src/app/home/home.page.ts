@@ -1,7 +1,8 @@
-import { Component, signal, OnDestroy } from '@angular/core';
+import { Component, signal, computed, OnDestroy } from '@angular/core';
 import { IonContent } from '@ionic/angular/standalone';
 import { BoardComponent } from './components/board/board.component';
 import { TableComponent } from './components/table/table.component';
+import { VictoryOverlayComponent } from './components/victory-overlay/victory-overlay.component';
 import { GameStateService } from './services/game-state.service';
 import { environment } from '../../environments/environment';
 import { Subscription } from 'rxjs';
@@ -11,13 +12,20 @@ import { NEW_TURN_BANNER_DURATION_MS, GameConfig } from '@keezen/shared';
   selector: 'app-home',
   templateUrl: 'home.page.html',
   styleUrl: 'home.page.scss',
-  imports: [IonContent, BoardComponent, TableComponent],
+  imports: [IonContent, BoardComponent, TableComponent, VictoryOverlayComponent],
 })
 export class HomePage implements OnDestroy {
 
   showNewTurnBanner = signal(false);
   newTurnColor = signal<string>('');
   newTurnName = signal<string>('');
+
+  winnerName = computed(() => {
+    const color = this.gameStateService.winner();
+    if (!color) return '';
+    const player = this.gameStateService.data()?.gameState.players.find(p => p.color === color);
+    return player?.name ?? color;
+  });
 
   private newTurnTimeout: ReturnType<typeof setTimeout> | null = null;
   private newTurnSub: Subscription | null = null;

@@ -1,0 +1,21 @@
+<div class="victory-overlay" [attr.data-color]="color()">
+
+  <!-- Confetti -->
+  <div class="confetti-container">
+    @for (p of particles; track p.id) {
+      <div class="confetti-piece" [style]="p.styles"></div>
+    }
+  </div>
+
+  <!-- Card centrale -->
+  <div class="victory-card">
+    <div class="trophy">🏆</div>
+    <div class="victory-title">Victoire !</div>
+    <div class="winner-row">
+      <div class="winner-marble" [class]="'wm-' + color()"></div>
+      <div class="winner-name">{{ name() }}</div>
+    </div>
+    <div class="winner-subtitle">a gagné la partie !</div>
+  </div>
+
+</div>

@@ -86,6 +86,8 @@ export class Game {
         }
 
         console.log("🏆 Game over!");
+        const winner = this.players.find(p => hasWon(p.marblePositions, p.color))!;
+        this.messenger.send({ type: 'gameEnded', winner: winner.color });
     }
 
     private startNewRound(): void {

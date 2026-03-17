@@ -1,55 +1,110 @@
-## Bug 1 — Incorrect preview destination when card "7" results in a promotion
-
-**Files involved:**
-- `frontend/src/app/home/components/board/board.component.ts` — `previewInfo` computed signal (lines 107–119)
-- `packages/shared/src/move-validator.ts` — `buildMoveAction` (currently unexported)
-
-**Description:**
-When the player selects the "7" card and has already chosen the step count for the first marble (i.e., `sevenFirstSteps < 7`),
-the preview path destination is computed by calling `getPositionAfterMove(focusedMarble, stepsForFocused)`,
-which always returns a position along `MAIN_PATH`. If the move would actually result in a **promotion**
-(the marble crosses its own start position and enters the arrival zone),
-`getPositionAfterMove` returns the wrong square — the raw MAIN_PATH position after the start, instead of the correct arrival zone square.
-
-For all other cards (non-7), `getLegalAction()` is called, which internally calls `buildMoveAction()` and correctly detects the promote condition,
-returning an action of type `'promote'` with `to` pointing to the arrival zone. The 7-split preview branch bypasses this logic entirely.
-
-**Steps to fix:**
-
-1. **Export a new helper function** from `packages/shared/src/move-validator.ts`:
-   - Create and export a function `getActionForSteps(card: Card, from: number, steps: number, ctx: LegalMoveContext): Action | null` that is a thin wrapper calling `buildMoveAction(card, from, steps, ctx)` (currently private).
-   - This function returns the correct `Action` including `type: 'promote'` and the actual arrival zone square as `to` when applicable.
-
-2. **Update the preview logic** in `board.component.ts`, `previewInfo` computed signal, in the `card.value === '7'` branch where `steps1 < 7 && marble1 !== null`:
-   - Replace the call to `getPositionAfterMove(focusedMarble, stepsForFocused)` and the manual construction of a `'move'` action with a call to the new `getActionForSteps` function.
-   - Pass a dummy card (e.g., `{ id: '__preview__', value: '7', suit: '♠' }`), the focused marble position, the computed `stepsForFocused`, and the current context `ctx`.
-   - Use the returned action (which may be a `'move'` or `'promote'`) in the existing `computePreviewFromAction(action)` call.
+## TODO — Keezen Game
 
 ---
 
-## Bug 2 — Marble on its own start position can be illegally captured by a backward move
+### 1. Fix 7-card split move preview
 
-**Files involved:**
-- `packages/shared/src/move-validator.ts` — `buildBackwardMoveAction` (lines 204–234) and `pathIsClear` (lines 256–287)
+**Context:** When the player selects the "7" card and then selects a first marble, a path preview is shown.
+The issue is that the preview for the second marble only appears when the user hovers over the second marble —
+it doesn't show automatically from the first marble.
 
-**Description:**
-A marble standing on its **own** start position (i.e., the marble's color matches the start position's color) is supposed to be **invincible**
-— it cannot be captured or passed through by other players. This rule is already correctly enforced for **forward** moves:
-`pathIsClear()` checks every intermediate square and the destination, and returns `false` if a marble is resting on its own start position.
+**Expected behavior:**
+- After selecting the "7" card and choosing the first marble (and step count), the preview should show only the first marble's path.
+- Once the player selects a second marble, the preview should update to show both marbles' paths simultaneously (first marble path + second marble path), using `sevenFirstSteps` for the first and the remaining steps (7 - sevenFirstSteps) for the second.
+- The preview should NOT require hovering over the second marble to appear.
 
-However, `buildBackwardMoveAction()` (used when card "4" is played, moving backward 4 squares) **does not perform any path checks**. It only checks whether the destination `to` belongs to the current player's own marbles. It does not check:
-- Whether the destination `to` is another player's start position with that player's marble on it (should be uncapturable).
-- Whether any **intermediate** square along the backward path is a start position with the owner's marble on it (should block passage).
+**Relevant code:**
+- `frontend/src/app/home/components/board/board.component.ts` — `previewInfo` computed signal (handles path preview rendering)
+- `frontend/src/app/home/services/game-state.service.ts` — `sevenFirstSteps`, `selectedSplit7MarblePosition` signals
 
-Note: a marble of color X standing on the start position of color Y (a different color)
- has no special protection and can be captured normally — only a marble on its **own** color's start is protected.
+---
 
-**Steps to fix:**
+### 2. Disable move preview for swap (Jack card)
 
-1. **Add a destination check** in `buildBackwardMoveAction`, immediately after `if (ownMarbles.includes(to)) return null;`:
-   - If `to` is any player's start position (use `getStartPositionOwner(to)`), and that player's marble is currently at `to` (check `ctx.marblesByColor[owner].includes(to)`), then `return null` — the marble is invincible and the move is illegal.
+**Context:** When the "J" (Jack) card is selected, the board shows a path preview.
+Swaps are positional exchanges, not movement along a path, so showing a path preview is misleading.
 
-2. **Add intermediate square checks** in `buildBackwardMoveAction`:
-   - Before computing `to`, iterate over the intermediate squares (steps 1 to `steps - 1`) going backward from `from` using `getPositionAfterBackwardMove`.
-   - For each intermediate square, apply the same check: if it is a start position and the owning player's marble is there, `return null` — the path is blocked.
-   - Alternatively, extract this logic into a new `pathIsClearBackward(from, steps, playerColor, allMarbles, marblesByColor)` helper function (mirroring the existing `pathIsClear` for forward moves) and call it from `buildBackwardMoveAction`.
+**Expected behavior:**
+- When the active card is "J" and the turn phase is `SWAP_TARGET`, do not render any path or destination preview on the board.
+- The preview should remain hidden until a non-swap card is selected.
+
+**Relevant code:**
+- `frontend/src/app/home/components/board/board.component.ts` — `previewInfo` computed signal
+- Check card value: if `selectedCard()?.value === 'J'`, return an empty preview (`{ path: new Set(), destination: null }`)
+
+---
+
+### 3. Fix and translate the victory screen
+
+**Context:** The victory overlay (`VictoryOverlayComponent`) was recently added. Two issues exist:
+1. The screen uses French text ("victoire") regardless of outcome.
+2. Every player sees "victoire" (victory) even if they lost.
+
+**Expected behavior:**
+- All text in the overlay must be in English.
+- The overlay must be personalized per player:
+  - The **winning player** sees: `"Victory!"` (or similar celebratory message).
+  - All **losing players** see: `"Defeat"` (or similar).
+- The confetti animation should only play for the winning player (or be visually distinct for losers).
+
+**Implementation steps:**
+1. In `frontend/src/app/home/home.page.html` and `home.page.ts`, pass the local player's color (`myPlayerColor`) and the winner's color (`winner`) to `VictoryOverlayComponent`.
+2. In `victory-overlay.component.ts`, add an `@Input isWinner: boolean` (computed as `color === winnerColor`).
+3. Update the template to display `"Victory!"` if `isWinner`, otherwise `"Defeat"`.
+4. Optionally suppress or grey out the confetti animation when `isWinner` is false.
+
+**Relevant code:**
+- `frontend/src/app/home/components/victory-overlay/victory-overlay.component.ts` — overlay component
+- `frontend/src/app/home/home.page.html` — where overlay is rendered
+- `frontend/src/app/home/services/game-state.service.ts` — `winner` and `myPlayerColor` signals
+
+---
+
+### 4. Add sound effects for each game action/animation
+
+**Context:** The game currently has no audio feedback. Sounds should be generated programmatically using the Web Audio API (no audio files),
+triggered in sync with each animation event.
+
+**Requirements:**
+- All sounds must be generated in code using `AudioContext` (no external audio files).
+- Each action type should have a distinct sound:
+  - `move` — Short, low thud (heavy marble rolling), example already provided in original TODO.
+  - `enter` — A brighter, slightly longer sound (marble entering the board).
+  - `capture` — An impact sound (marble knocked off the board).
+  - `swap` — A double-hit or "whoosh" sound.
+  - `promote` — A soft chime or ascending tone (marble reaching the finish zone).
+  - `discard` / `pass` — A subtle card-swipe or neutral tick.
+  - New turn banner — A short fanfare or notification sound.
+
+**Implementation steps:**
+1. Create a `SoundService` (or a standalone utility file) in `frontend/src/app/home/services/` that exposes one function per action type (e.g. `playMoveSound()`, `playCaptureSound()`, etc.).
+2. Use `AudioContext`, `OscillatorNode`, and `GainNode` to synthesize each sound. See the reference implementation in the original TODO for the `move` sound as a starting template.
+3. Trigger each sound from `board.component.ts` at the start of the corresponding marble animation (inside the animation playback logic keyed by `ActionType`).
+4. Trigger the new-turn sound from `home.page.ts` when the new-turn banner is shown.
+
+**Reference implementation for `move` sound (from original TODO):**
+```typescript
+const playMoveSound = () => {
+  const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const oscillator = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+
+  oscillator.type = 'triangle';
+  oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+
+  gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  oscillator.start();
+  oscillator.stop(audioCtx.currentTime + 0.1);
+};
+```
+
+**Relevant code:**
+- `frontend/src/app/home/components/board/board.component.ts` — marble animation logic (action type → animation dispatch)
+- `frontend/src/app/home/home.page.ts` — new-turn banner display logic
+- `packages/shared/src/constants.ts` — `MARBLE_ANIMATION_DURATIONS` (use these as timing reference)

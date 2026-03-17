@@ -155,6 +155,15 @@ export function getLegalAction(
     return null;
 }
 
+export function getActionForSteps(
+    card: Card,
+    from: number,
+    steps: number,
+    ctx: LegalMoveContext
+): Action | null {
+    return buildMoveAction(card, from, steps, ctx);
+}
+
 function buildMoveAction(
     card: Card,
     from: number,
@@ -213,6 +222,14 @@ function buildBackwardMoveAction(
     if (to === null) return null;
 
     if (ownMarbles.includes(to)) return null;
+
+    // Check intermediate squares and destination for invincible marbles (on their own start)
+    for (let i = 1; i <= steps; i++) {
+        const pos = getPositionAfterBackwardMove(from, i);
+        if (pos === null) return null;
+        const owner = getStartPositionOwner(pos);
+        if (owner !== null && ctx.marblesByColor[owner].includes(pos)) return null;
+    }
 
     if (allMarbles.includes(to)) {
         return {

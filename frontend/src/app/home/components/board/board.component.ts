@@ -26,6 +26,7 @@ import {
   MAIN_PATH,
   getPositionAfterMove,
   getLegalAction,
+  getActionForSteps,
   type LegalMoveContext,
 } from '@keezen/shared';
 
@@ -110,10 +111,8 @@ export class BoardComponent implements OnInit, OnDestroy {
       if (steps1 < 7 && marble1 !== null) {
         // Show path for whichever marble is focused
         const stepsForFocused = focusedMarble === marble1 ? steps1 : 7 - steps1;
-        const to = getPositionAfterMove(focusedMarble, stepsForFocused);
-        if (to !== null) {
-          action = { type: 'move', from: focusedMarble, to, cardPlayed: [card], playerColor: myColor };
-        }
+        const dummyCard = { id: '__preview__', value: '7' as const, suit: '♠' as const };
+        action = getActionForSteps(dummyCard, focusedMarble, stepsForFocused, ctx);
       } else {
         action = getLegalAction(card, focusedMarble, ctx);
       }
