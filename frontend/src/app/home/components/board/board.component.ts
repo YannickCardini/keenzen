@@ -1,5 +1,6 @@
 import { Component, HostListener, OnInit, OnDestroy, signal, computed, effect } from '@angular/core';
 import { GameStateService } from '../../services/game-state.service';
+import { SoundService } from '../../services/sound.service';
 import { IonCol, IonGrid, IonRow } from '@ionic/angular/standalone';
 import { CommonModule } from '@angular/common';
 import { TockCardComponent } from 'src/app/shared/tock-card.component';
@@ -109,25 +110,41 @@ export class BoardComponent implements OnInit, OnDestroy {
       const steps1 = this.gameStateService.sevenFirstSteps();
       const marble1 = this.gameStateService.selectedMarblePosition();
       if (steps1 < 7 && marble1 !== null) {
-        // Show path for whichever marble is focused
-        const stepsForFocused = focusedMarble === marble1 ? steps1 : 7 - steps1;
+        const marble2 = this.gameStateService.selectedSplit7MarblePosition();
         const dummyCard = { id: '__preview__', value: '7' as const, suit: '♠' as const };
-        action = getActionForSteps(dummyCard, focusedMarble, stepsForFocused, ctx);
+        if (marble2 !== null) {
+          // Both marbles selected: show both paths simultaneously
+          const action1 = getActionForSteps(dummyCard, marble1, steps1, ctx);
+          const action2 = getActionForSteps(dummyCard, marble2, 7 - steps1, ctx);
+          const preview1 = action1 ? this.computePreviewFromAction(action1) : { path: new Set<number>(), destination: null };
+          const preview2 = action2 ? this.computePreviewFromAction(action2) : { path: new Set<number>(), destination: null };
+          const combinedPath = new Set([...preview1.path, ...preview2.path]);
+          if (preview1.destination !== null) combinedPath.add(preview1.destination);
+          return { path: combinedPath, destination: preview2.destination };
+        }
+        // Only first marble selected: always show marble1's path
+        const action1 = getActionForSteps(dummyCard, marble1, steps1, ctx);
+        const preview1 = action1
+          ? this.computePreviewFromAction(action1)
+          : { path: new Set<number>(), destination: null };
+
+        // If hovering over a candidate second marble, also show its preview
+        if (focusedMarble !== null && focusedMarble !== marble1) {
+          const action2 = getActionForSteps(dummyCard, focusedMarble, 7 - steps1, ctx);
+          if (action2) {
+            const preview2 = this.computePreviewFromAction(action2);
+            const combinedPath = new Set([...preview1.path, ...preview2.path]);
+            if (preview1.destination !== null) combinedPath.add(preview1.destination);
+            return { path: combinedPath, destination: preview2.destination };
+          }
+        }
+
+        return { path: preview1.path, destination: preview1.destination };
       } else {
         action = getLegalAction(card, focusedMarble, ctx);
       }
     } else if (card.value === 'J') {
-      const marble1 = this.gameStateService.selectedMarblePosition();
-      if (marble1 !== null) {
-        // Hovering a swap target — show swap destinations for both marbles
-        const swapAction = getLegalAction(card, marble1, ctx, focusedMarble);
-        if (swapAction) {
-          return { path: new Set([swapAction.from, swapAction.to]), destination: null };
-        }
-        return { path: new Set(), destination: null };
-      } else {
-        action = getLegalAction(card, focusedMarble, ctx);
-      }
+      return { path: new Set(), destination: null };
     } else {
       action = getLegalAction(card, focusedMarble, ctx);
     }
@@ -144,7 +161,7 @@ export class BoardComponent implements OnInit, OnDestroy {
   private actionPlayedSub: Subscription | null = null;
 
 
-  constructor(protected gameStateService: GameStateService) {
+  constructor(protected gameStateService: GameStateService, private soundService: SoundService) {
 
     effect(() => {
       this.displayedGameData.set(this.gameStateService.data());
@@ -202,6 +219,7 @@ export class BoardComponent implements OnInit, OnDestroy {
             flyIndex: i,
           };
 
+          this.soundService.playCard();
           // Ajouter la carte au tableau des cartes en vol
           this.flyingCards.update(prev => [...prev, cardInfo]);
 
@@ -233,6 +251,7 @@ export class BoardComponent implements OnInit, OnDestroy {
       }
     }
     return new Promise(resolve => {
+      this.soundService.playCard();
       this.flyingCard.set(card);
       setTimeout(() => {
         this.discardPile.update(pile => [card, ...pile]);
@@ -267,6 +286,7 @@ export class BoardComponent implements OnInit, OnDestroy {
       const t = a.type as ActionType;
       if (t === 'move') {
         for (const step of this.calculateActionsMove(a)) {
+          this.soundService.playMove();
           this.updateMarblePosition(step);
           await applyAndWait(step.to, { marbleClass: 'marble-moving' }, MARBLE_ANIMATION_DURATIONS.move);
         }
@@ -274,10 +294,12 @@ export class BoardComponent implements OnInit, OnDestroy {
         const captureSteps = this.calculateActionsMove(a);
         for (let i = 0; i < captureSteps.length - 1; i++) {
           const step = captureSteps[i]!;
+          this.soundService.playMove();
           this.updateMarblePosition(step);
           await applyAndWait(step.to, { marbleClass: 'marble-moving' }, MARBLE_ANIMATION_DURATIONS.move);
         }
         const finalStep = captureSteps[captureSteps.length - 1]!;
+        this.soundService.playCapture();
         this.updateMarblePosition(finalStep);
         await Promise.all([
           applyAndWait(finalStep.from, { marbleClass: 'marble-capturing' }),
@@ -289,9 +311,11 @@ export class BoardComponent implements OnInit, OnDestroy {
         const beforeStartPos = MAIN_PATH[(startPosIndex - 1 + MAIN_PATH.length) % MAIN_PATH.length];
         const mainPathAction: Action = { ...a, type: 'move', to: beforeStartPos };
         for (const step of this.calculateActionsMove(mainPathAction)) {
+          this.soundService.playMove();
           this.updateMarblePosition(step);
           await applyAndWait(step.to, { marbleClass: 'marble-moving' }, MARBLE_ANIMATION_DURATIONS.move);
         }
+        this.soundService.playPromote();
         this.updateMarblePosition({ ...a, from: beforeStartPos });
         await applyAndWait(a.to, { marbleClass: 'marble-promoting', squareClass: 'square-promoting' });
       }
@@ -302,6 +326,7 @@ export class BoardComponent implements OnInit, OnDestroy {
         const enemyColor = this.getMarbleOnSquare(action.to);
         const isCapture = enemyColor !== null && enemyColor !== action.playerColor;
 
+        this.soundService.playEnter();
         if (isCapture) {
           // Phase 1: enemy marble is still at action.to — eject it + shockwave on square
           await applyAndWait(action.to, { marbleClass: 'marble-ejected', squareClass: 'square-enter-impact' }, MARBLE_EJECTED_DURATION_MS);
@@ -340,6 +365,7 @@ export class BoardComponent implements OnInit, OnDestroy {
         break;
 
       case 'swap': {
+        this.soundService.playSwap();
         const targetColor = this.displayedGameData()?.gameState.players.find(
           p => p.color !== action.playerColor && (p.marblePositions ?? []).includes(action.to)
         )?.color;
@@ -353,6 +379,12 @@ export class BoardComponent implements OnInit, OnDestroy {
         ]);
         break;
       }
+
+      case 'discard':
+      case 'pass':
+        this.soundService.playDiscard();
+        this.updateMarblePosition(action);
+        break;
 
       default:
         this.updateMarblePosition(action);

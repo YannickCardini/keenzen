@@ -1,21 +1,23 @@
-<div class="victory-overlay" [attr.data-color]="color()">
+<div class="victory-overlay" [attr.data-color]="color()" [class.defeat]="!isWinner()">
 
-  <!-- Confetti -->
-  <div class="confetti-container">
-    @for (p of particles; track p.id) {
-      <div class="confetti-piece" [style]="p.styles"></div>
-    }
-  </div>
+  <!-- Confetti — only for the winner -->
+  @if (isWinner()) {
+    <div class="confetti-container">
+      @for (p of particles; track p.id) {
+        <div class="confetti-piece" [style]="p.styles"></div>
+      }
+    </div>
+  }
 
   <!-- Card centrale -->
   <div class="victory-card">
-    <div class="trophy">🏆</div>
-    <div class="victory-title">Victoire !</div>
+    <div class="trophy">{{ isWinner() ? '🏆' : '💀' }}</div>
+    <div class="victory-title">{{ isWinner() ? 'Victory!' : 'Defeat' }}</div>
     <div class="winner-row">
       <div class="winner-marble" [class]="'wm-' + color()"></div>
       <div class="winner-name">{{ name() }}</div>
     </div>
-    <div class="winner-subtitle">a gagné la partie !</div>
+    <div class="winner-subtitle">{{ isWinner() ? 'won the game!' : 'won the game.' }}</div>
   </div>
 
 </div>

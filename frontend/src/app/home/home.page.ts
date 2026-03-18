@@ -4,6 +4,7 @@ import { BoardComponent } from './components/board/board.component';
 import { TableComponent } from './components/table/table.component';
 import { VictoryOverlayComponent } from './components/victory-overlay/victory-overlay.component';
 import { GameStateService } from './services/game-state.service';
+import { SoundService } from './services/sound.service';
 import { environment } from '../../environments/environment';
 import { Subscription } from 'rxjs';
 import { NEW_TURN_BANNER_DURATION_MS, GameConfig } from '@keezen/shared';
@@ -30,7 +31,7 @@ export class HomePage implements OnDestroy {
   private newTurnTimeout: ReturnType<typeof setTimeout> | null = null;
   private newTurnSub: Subscription | null = null;
 
-  constructor(public gameStateService: GameStateService) {
+  constructor(public gameStateService: GameStateService, private soundService: SoundService) {
     // ✅ Subscription RxJS propre — réactive à chaque next() du BehaviorSubject,
     // contrairement à .value qui est un snapshot lu une seule fois au moment
     // de l'exécution de l'effect.
@@ -45,6 +46,9 @@ export class HomePage implements OnDestroy {
       this.newTurnColor.set(currentTurn);
       this.newTurnName.set(player?.name ?? currentTurn);
       this.showNewTurnBanner.set(true);
+      if (this.gameStateService.isMyTurn()) {
+        this.soundService.playNewTurn();
+      }
 
       if (this.newTurnTimeout) clearTimeout(this.newTurnTimeout);
       this.newTurnTimeout = setTimeout(() => {

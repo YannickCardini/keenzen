@@ -15,6 +15,7 @@ interface ConfettiPiece {
 export class VictoryOverlayComponent {
   color = input.required<MarbleColor>();
   name = input.required<string>();
+  isWinner = input.required<boolean>();
 
   readonly particles: ConfettiPiece[] = Array.from({ length: 40 }, (_, i) => {
     const colors = ['#ef4444', '#22c55e', '#3b82f6', '#f97316', '#f0c040', '#a855f7', '#ffffff', '#fb7185'];

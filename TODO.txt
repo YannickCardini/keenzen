@@ -1,110 +1,103 @@
-## TODO — Keezen Game
+## TODO
 
 ---
 
-### 1. Fix 7-card split move preview
+### 1. Fix 7-card split movement preview
 
-**Context:** When the player selects the "7" card and then selects a first marble, a path preview is shown.
-The issue is that the preview for the second marble only appears when the user hovers over the second marble —
-it doesn't show automatically from the first marble.
+**File:** `frontend/src/app/home/components/board/board.component.ts` → `previewInfo` computed signal
+
+**Context:** When a player plays the 7 card, they must distribute 7 steps between two of their own marbles. The selection flow is:
+  1. Player selects a card (7)
+  2. Player selects the step count to give to the first marble (e.g., 3)
+  3. Player clicks the first marble → marble1 is now selected (`selectedMarblePosition`)
+  4. Player clicks the second marble → marble2 is now selected (`selectedSplit7MarblePosition`)
+
+**Expected preview behavior:**
+  - **Phase 3 (marble1 selected, marble2 not yet selected):**
+    - Always show marble1's path preview (for `steps1` steps), regardless of where the mouse is
+    - Additionally, when hovering over a valid candidate for marble2 (a different own marble), also show that marble's path preview (for `7 - steps1` steps) on top of marble1's preview
+  - **Phase 4 (both marble1 and marble2 selected):**
+    - Always show both marble1's path preview (for `steps1` steps) AND marble2's path preview (for `7 - steps1` steps) simultaneously
+
+**Current bug:** The second marble's preview is not shown correctly. Specifically:
+  - In phase 3, when hovering over a candidate marble2, marble1's preview may disappear
+  - In phase 4, only one marble's path may be shown rather than both simultaneously
+
+**Implementation hint:** In `previewInfo`, marble1's preview should always be included in the result when `selectedMarblePosition` is set and the card is 7. Do not let `hoveredMarble` override marble1's preview — instead, always include marble1 and layer the hovered/selected marble2 preview on top.
+
+---
+
+### 2. Fix enemy marble hover preview (non-Jack cards)
+
+**File:** `frontend/src/app/home/components/board/board.component.ts` → `onMarbleMouseEnter` and `previewInfo`
+
+**Context:** `onMarbleMouseEnter(index)` currently sets `hoveredMarble` for any marble when a card is selected, including enemy marbles. This causes `previewInfo` to use an enemy marble's position as `focusedMarble` and attempt to compute a move preview from it.
 
 **Expected behavior:**
-- After selecting the "7" card and choosing the first marble (and step count), the preview should show only the first marble's path.
-- Once the player selects a second marble, the preview should update to show both marbles' paths simultaneously (first marble path + second marble path), using `sevenFirstSteps` for the first and the remaining steps (7 - sevenFirstSteps) for the second.
-- The preview should NOT require hovering over the second marble to appear.
+  - When a card is selected (any card **except Jack in phase 2** — Jack phase 2 intentionally shows enemy marbles as swap targets), hovering over an **enemy marble** must **not** trigger any movement preview.
+  - Only own marbles should trigger path/destination previews.
 
-**Relevant code:**
-- `frontend/src/app/home/components/board/board.component.ts` — `previewInfo` computed signal (handles path preview rendering)
-- `frontend/src/app/home/services/game-state.service.ts` — `sevenFirstSteps`, `selectedSplit7MarblePosition` signals
+**Fix:** In `onMarbleMouseEnter`, before setting `hoveredMarble`, check that the hovered marble belongs to the current player. If it is an enemy marble and the current selection state is not "Jack waiting for swap target" (`selectedSwapTargetPosition` phase), do not update `hoveredMarble`.
 
 ---
 
-### 2. Disable move preview for swap (Jack card)
+### 3. Add missing sounds
 
-**Context:** When the "J" (Jack) card is selected, the board shows a path preview.
-Swaps are positional exchanges, not movement along a path, so showing a path preview is misleading.
+**Files:**
+  - `frontend/src/app/home/services/sound.service.ts`
+  - `frontend/src/app/home/home.page.ts` (or wherever turn/game-end events are handled)
+  - `frontend/src/app/home/components/victory-overlay/victory-overlay.component.ts`
 
-**Expected behavior:**
-- When the active card is "J" and the turn phase is `SWAP_TARGET`, do not render any path or destination preview on the board.
-- The preview should remain hidden until a non-swap card is selected.
+**Context:** The `SoundService` currently only uses procedurally generated Web Audio API sounds. Audio asset files exist in `frontend/src/assets/sounds/`:
+  - `new_turn.ogg`
+  - `card.wav`
+  - `capture.wav`
+  - `teleport.wav` (intended for swap/Jack)
+  - `victory.wav` 
+  - `defeat.wav`
 
-**Relevant code:**
-- `frontend/src/app/home/components/board/board.component.ts` — `previewInfo` computed signal
-- Check card value: if `selectedCard()?.value === 'J'`, return an empty preview (`{ path: new Set(), destination: null }`)
+**Sub-tasks:**
 
----
 
-### 3. Fix and translate the victory screen
 
-**Context:** The victory overlay (`VictoryOverlayComponent`) was recently added. Two issues exist:
-1. The screen uses French text ("victoire") regardless of outcome.
-2. Every player sees "victoire" (victory) even if they lost.
+#### 3b. Add `playVictory()` sound — played when the human player wins
 
-**Expected behavior:**
-- All text in the overlay must be in English.
-- The overlay must be personalized per player:
-  - The **winning player** sees: `"Victory!"` (or similar celebratory message).
-  - All **losing players** see: `"Defeat"` (or similar).
-- The confetti animation should only play for the winning player (or be visually distinct for losers).
+  - Trigger location: when `winner` signal is set and the winner's color matches `myPlayerColor`.
+  - Asset file available: `frontend/src/assets/sounds/victory.wav` .
+  - See task 4 for how to load asset files.
 
-**Implementation steps:**
-1. In `frontend/src/app/home/home.page.html` and `home.page.ts`, pass the local player's color (`myPlayerColor`) and the winner's color (`winner`) to `VictoryOverlayComponent`.
-2. In `victory-overlay.component.ts`, add an `@Input isWinner: boolean` (computed as `color === winnerColor`).
-3. Update the template to display `"Victory!"` if `isWinner`, otherwise `"Defeat"`.
-4. Optionally suppress or grey out the confetti animation when `isWinner` is false.
+#### 3c. Add `playDefeat()` sound — played when the human player loses
 
-**Relevant code:**
-- `frontend/src/app/home/components/victory-overlay/victory-overlay.component.ts` — overlay component
-- `frontend/src/app/home/home.page.html` — where overlay is rendered
-- `frontend/src/app/home/services/game-state.service.ts` — `winner` and `myPlayerColor` signals
+  - Trigger location: when `winner` signal is set and the winner's color does NOT match `myPlayerColor`.
+  - Asset file available: `frontend/src/assets/sounds/defeat.wav`.
+  - See task 4 for how to load asset files.
 
 ---
 
-### 4. Add sound effects for each game action/animation
+### 4. Load sounds from asset files when available, fall back to synthesized sounds
 
-**Context:** The game currently has no audio feedback. Sounds should be generated programmatically using the Web Audio API (no audio files),
-triggered in sync with each animation event.
+**File:** `frontend/src/app/home/services/sound.service.ts`
 
-**Requirements:**
-- All sounds must be generated in code using `AudioContext` (no external audio files).
-- Each action type should have a distinct sound:
-  - `move` — Short, low thud (heavy marble rolling), example already provided in original TODO.
-  - `enter` — A brighter, slightly longer sound (marble entering the board).
-  - `capture` — An impact sound (marble knocked off the board).
-  - `swap` — A double-hit or "whoosh" sound.
-  - `promote` — A soft chime or ascending tone (marble reaching the finish zone).
-  - `discard` / `pass` — A subtle card-swipe or neutral tick.
-  - New turn banner — A short fanfare or notification sound.
+**Context:** Asset files exist in `frontend/src/assets/sounds/` for several actions. Currently, ALL sounds are synthesized via Web Audio API. The asset files should be used instead when available.
 
-**Implementation steps:**
-1. Create a `SoundService` (or a standalone utility file) in `frontend/src/app/home/services/` that exposes one function per action type (e.g. `playMoveSound()`, `playCaptureSound()`, etc.).
-2. Use `AudioContext`, `OscillatorNode`, and `GainNode` to synthesize each sound. See the reference implementation in the original TODO for the `move` sound as a starting template.
-3. Trigger each sound from `board.component.ts` at the start of the corresponding marble animation (inside the animation playback logic keyed by `ActionType`).
-4. Trigger the new-turn sound from `home.page.ts` when the new-turn banner is shown.
+**Mapping of asset files to existing sound methods:**
 
-**Reference implementation for `move` sound (from original TODO):**
-```typescript
-const playMoveSound = () => {
-  const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const oscillator = audioCtx.createOscillator();
-  const gainNode = audioCtx.createGain();
+  | Asset file              | Sound method to update    |
+  |-------------------------|---------------------------|
+  | `new_turn.ogg`          | `playNewTurn()`           |
+  | `card.wav`              | `playCard()`              |
+  | `capture.wav`           | `playCapture()`           |
+  | `teleport.wav`          | `playSwap()`              |
+  | `vitcory.wav`           | `playVictory()` (new)     |
+  | `defeat.wav`            | `playDefeat()` (new)      |
 
-  oscillator.type = 'triangle';
-  oscillator.frequency.setValueAtTime(150, audioCtx.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+**Implementation approach:**
 
-  gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+  1. At service initialization (`constructor` or `ngOnInit`), attempt to `fetch()` each asset file.
+  2. If the fetch succeeds, decode the audio data using `AudioContext.decodeAudioData()` and store the resulting `AudioBuffer` in a private map (keyed by sound name).
+  3. In each `play*()` method, check if a pre-loaded `AudioBuffer` exists for that sound:
+     - If yes: create a `BufferSource`, connect it to `ctx.destination`, and play it.
+     - If no: fall back to the existing Web Audio API synthesis code.
+  4. Handle potential fetch/decode errors gracefully (log a warning, fall back to synthesis).
 
-  oscillator.connect(gainNode);
-  gainNode.connect(audioCtx.destination);
-
-  oscillator.start();
-  oscillator.stop(audioCtx.currentTime + 0.1);
-};
-```
-
-**Relevant code:**
-- `frontend/src/app/home/components/board/board.component.ts` — marble animation logic (action type → animation dispatch)
-- `frontend/src/app/home/home.page.ts` — new-turn banner display logic
-- `packages/shared/src/constants.ts` — `MARBLE_ANIMATION_DURATIONS` (use these as timing reference)
+**Note:** Asset loading uses `fetch()` with relative URLs like `'assets/sounds/new_turn.ogg'`. Ensure the Angular asset configuration in `angular.json` already includes the `sounds/` folder (it should by default under `assets/`).

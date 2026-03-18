@@ -82,7 +82,11 @@
        ÉCRAN DE VICTOIRE
        ═══════════════════════════════════════════════════════════ -->
   @if (gameStateService.winner(); as winnerColor) {
-  <app-victory-overlay [color]="winnerColor" [name]="winnerName()"></app-victory-overlay>
+  <app-victory-overlay
+    [color]="winnerColor"
+    [name]="winnerName()"
+    [isWinner]="gameStateService.myPlayerColor() === winnerColor || gameStateService.myPlayerColor() === null"
+  ></app-victory-overlay>
   }
 
 </ion-content>
