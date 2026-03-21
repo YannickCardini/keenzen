@@ -314,6 +314,64 @@ export class SoundService {
     });
   }
 
+  /** Stressful countdown tick — last 5 seconds warning. Pitch rises as time runs out. */
+  playCountdownTick(secondsLeft: number): void {
+    const ctx = this.getCtx();
+    const t = ctx.currentTime;
+
+    // Pitch increases as time runs out (600 Hz at 5 s → 900 Hz at 1 s)
+    const baseFreq = 600 + (5 - secondsLeft) * 75;
+
+    // Sharp tick body — square wave drops quickly
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(baseFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, t + 0.05);
+    gain.gain.setValueAtTime(0.0, t);
+    gain.gain.linearRampToValueAtTime(0.35, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.08);
+
+    // High click for sharpness
+    const click = ctx.createOscillator();
+    const clickGain = ctx.createGain();
+    click.type = 'sine';
+    click.frequency.setValueAtTime(baseFreq * 2.5, t);
+    clickGain.gain.setValueAtTime(0.18, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.03);
+    click.connect(clickGain);
+    clickGain.connect(ctx.destination);
+    click.start(t);
+    click.stop(t + 0.03);
+  }
+
+  /** Urgent descending buzzer — time is up, AI will play instead. */
+  playTimeUp(): void {
+    const ctx = this.getCtx();
+    const t = ctx.currentTime;
+
+    // Three rapid sawtooth hits, descending in pitch
+    [0, 0.15, 0.30].forEach((offset, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const start = t + offset;
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(300 - i * 40, start);
+      osc.frequency.exponentialRampToValueAtTime(100, start + 0.12);
+      gain.gain.setValueAtTime(0.0, start);
+      gain.gain.linearRampToValueAtTime(0.5, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.01, start + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.12);
+    });
+  }
+
   /** Low descending tone — human player loses. */
   playDefeat(): void {
     if (this.playBuffer('defeat')) return;

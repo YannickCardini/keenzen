@@ -13,6 +13,7 @@ import { TockCardComponent } from 'src/app/shared/tock-card.component';
 import type { Card, MarbleColor } from '@keezen/shared';
 import { getValidSevenStepsForMarble, getPositionAfterMove, getLegalSplit7Action, type LegalMoveContext } from '@keezen/shared';
 import { Subscription } from 'rxjs';
+import { SoundService } from '../../services/sound.service';
 
 enum TURN_PHASE {
   DISCARD = "No playable moves",
@@ -172,7 +173,7 @@ enum TURN_PHASE {
     return timer > 0 ? this.timeLeft() / timer : 0;
   });
 
-  constructor(protected gameStateService: GameStateService) {
+  constructor(protected gameStateService: GameStateService, private soundService: SoundService) {
     // Clear the flying card once the server updates the hand
     effect(() => {
       this.gameStateService.data()?.gameState.hand;
@@ -233,7 +234,11 @@ enum TURN_PHASE {
         this.clearTimer();
         this.onTimeUp();
       } else {
-        this.timeLeft.set(current - 1);
+        const newTime = current - 1;
+        this.timeLeft.set(newTime);
+        if (newTime <= 5 && this.gameStateService.isMyTurn()) {
+          this.soundService.playCountdownTick(newTime);
+        }
       }
     }, 1000);
   }
@@ -247,6 +252,7 @@ enum TURN_PHASE {
 
   private onTimeUp(): void {
     if (this.gameStateService.isMyTurn()) {
+      this.soundService.playTimeUp();
       this.gameStateService.sendTurnTimeout();
     }
     this.selectedCardIndex.set(null);
