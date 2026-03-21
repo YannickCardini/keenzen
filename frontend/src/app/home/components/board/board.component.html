@@ -34,24 +34,22 @@
           [class.square-preview-path]="isPreviewPath(index)"
           [class.square-preview-destination]="isPreviewDestination(index)">
           @if (getMarbleOnSquare(index); as marbleColor) {
-          <div class="marble"
-            [ngClass]="[
+          <div class="marble" [ngClass]="[
               'marble-' + marbleColor,
               getMarbleAnimClass(index),
               isSelectableMarble(index) ? 'marble-selectable' : '',
               isSelectedMarble(index)   ? 'marble-selected'   : '',
               isMyMarble(index)         ? 'marble-mine'        : '',
               isDimmedMarble(index)     ? 'marble-dimmed'      : ''
-            ]"
-            (click)="onMarbleClick(index)"
-            (mouseenter)="onMarbleMouseEnter(index)"
+            ]" (click)="onMarbleClick(index)" (mouseenter)="onMarbleMouseEnter(index)"
             (mouseleave)="onMarbleMouseLeave(index)">
             <div class="marble-highlight"></div>
           </div>
           }
 
           <span class="square-number">
-            {{ debug ? index : '' }}
+            {{ debug ? index : '' }}<div style="font-size: medium;">{{ debug ? '' : (getArrivalNumber(index) ?? '') }}
+            </div>
           </span>
         </div>
         }
@@ -83,10 +81,8 @@
 
   <!-- Carte en vol : part du coin du joueur et se pose sur la pile -->
   @if (flyingCard(); as fc) {
-  <div class="flying-card"
-    [style.--fly-start-x]="(fc.startDx ?? 0) + 'px'"
-    [style.--fly-start-y]="(fc.startDy ?? 0) + 'px'"
-    [style.--fly-start-angle]="(fc.startAngle ?? -5) + 'deg'"
+  <div class="flying-card" [style.--fly-start-x]="(fc.startDx ?? 0) + 'px'"
+    [style.--fly-start-y]="(fc.startDy ?? 0) + 'px'" [style.--fly-start-angle]="(fc.startAngle ?? -5) + 'deg'"
     [ngClass]="['player-' + fc.color, fc.fromHand ? 'flying-card--from-hand' : '']">
     <app-tock-card [value]="fc.value" [suit]="fc.suit">
     </app-tock-card>
@@ -95,7 +91,8 @@
 
   <!-- Cartes en vol multiples lors d'un discard -->
   @for (fc of flyingCards(); track fc.flyIndex) {
-  <div class="flying-card flying-card--discard" [ngClass]="['player-' + fc.color, fc.fromHand ? 'flying-card--from-hand' : '']"
+  <div class="flying-card flying-card--discard"
+    [ngClass]="['player-' + fc.color, fc.fromHand ? 'flying-card--from-hand' : '']"
     [style.--fly-stagger-index]="fc.flyIndex" [style.z-index]="50 + fc.flyIndex">
     <app-tock-card [value]="fc.value" [suit]="fc.suit">
     </app-tock-card>

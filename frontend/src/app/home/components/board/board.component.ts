@@ -635,6 +635,14 @@ export class BoardComponent implements OnInit, OnDestroy {
     return this.displayedGameData()?.gameState.currentTurn === color;
   }
 
+  getArrivalNumber(index: number): number | null {
+    for (const positions of Object.values(this.arrivals)) {
+      const pos = positions.indexOf(index);
+      if (pos !== -1) return 4 - pos;
+    }
+    return null;
+  }
+
   getMarbleOnSquare(index: number): MarbleColor | null {
     const gameData = this.displayedGameData();
     if (!gameData || !this.gameStateService.isConnected()) return null;
