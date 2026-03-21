@@ -630,6 +630,196 @@ $bg-mid:   #1a2840;
   }
 }
 
+// ─── Rules card ───────────────────────────────────────────────────────────────
+.rules-card {
+  max-width: 440px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0;
+}
+
+.rules-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rules-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 4px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+  }
+}
+
+.rules-section {
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rules-section-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.rules-icon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.rules-section-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  letter-spacing: 0.02em;
+}
+
+.rules-text {
+  margin: 0;
+  font-size: 0.84rem;
+  color: rgba(255,255,255,0.6);
+  line-height: 1.55;
+  strong { color: rgba(255,255,255,0.85); }
+}
+
+.rules-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  li {
+    font-size: 0.84rem;
+    color: rgba(255,255,255,0.58);
+    line-height: 1.5;
+    strong { color: rgba(255,255,255,0.85); }
+    em { color: rgba(255,255,255,0.38); font-style: italic; }
+  }
+}
+
+.rules-note {
+  margin: 0;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.38);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+// Players banner
+.rules-team-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 0 2px;
+
+  .mm {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+// ─── Card actions tiles ───────────────────────────────────────────────────────
+.ca-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.ca-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 12px 8px;
+  border-radius: 12px;
+  border: 1px solid;
+  text-align: center;
+  transition: transform 0.15s;
+
+  &:hover { transform: translateY(-1px); }
+
+  &.ca-wide { grid-column: span 2; flex-direction: row; gap: 10px; }
+
+  &.ca-green  { background: rgba($c-green,  0.09); border-color: rgba($c-green,  0.28); .ca-val { color: $c-green; } }
+  &.ca-blue   { background: rgba($c-blue,   0.09); border-color: rgba($c-blue,   0.28); .ca-val { color: $c-blue; } }
+  &.ca-orange { background: rgba($c-orange, 0.09); border-color: rgba($c-orange, 0.28); .ca-val { color: $c-orange; } }
+  &.ca-purple { background: rgba(139,92,246, 0.09); border-color: rgba(139,92,246, 0.28); .ca-val { color: #a78bfa; } }
+  &.ca-red    { background: rgba($c-red,    0.09); border-color: rgba($c-red,    0.28); .ca-val { color: $c-red; } }
+  &.ca-muted  {
+    background: rgba(255,255,255,0.04);
+    border-color: rgba(255,255,255,0.1);
+    .ca-val { color: rgba(255,255,255,0.55); }
+  }
+}
+
+.ca-val {
+  font-size: 1.6rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+
+  &.ca-val-sm { font-size: 1.1rem; }
+}
+
+.ca-action {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.35;
+  em { font-style: italic; color: rgba(255,255,255,0.3); }
+}
+
+// Important rules alerts
+.rules-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rules-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.45;
+  strong { color: rgba(255,255,255,0.8); }
+}
+
+.alert-badge {
+  font-size: 1rem;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
 // ─── Settings card ────────────────────────────────────────────────────────────
 .settings-info {
   display: flex;

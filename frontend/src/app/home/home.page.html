@@ -59,7 +59,7 @@
           </svg>
         </button>
 
-        <button class="action-btn rules-btn">
+        <button class="action-btn rules-btn" (click)="openRules()">
           <span class="ab-marble ab-blue"></span>
           <span class="ab-text">Game Rules</span>
           <svg class="ab-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -79,7 +79,7 @@
           <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42
                    M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
         </svg>
-        <span>v1.0.0</span>
+        <span>v{{ appVersion }}</span>
       </button>
     </footer>
 
@@ -160,7 +160,7 @@
         <div class="settings-info">
           <div class="info-row">
             <span class="info-key">Version</span>
-            <span class="info-val">1.0.0</span>
+            <span class="info-val">{{ appVersion }}</span>
           </div>
           <div class="info-row">
             <span class="info-key">Contact</span>
@@ -199,6 +199,134 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ══════════════ RULES MODAL ══════════════ -->
+    <div class="modal-overlay" [class.active]="showRules" (click)="closeRules()">
+      <div class="modal-card rules-card" (click)="$event.stopPropagation()">
+
+        <button class="modal-close" (click)="closeRules()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
+
+        <div class="modal-header">
+          <div class="modal-marbles">
+            <span class="mm mm-red"></span>
+            <span class="mm mm-green"></span>
+            <span class="mm mm-blue"></span>
+            <span class="mm mm-orange"></span>
+          </div>
+          <h2 class="modal-title">Game Rules</h2>
+          <p class="rules-subtitle">Keezen — Old Dutch Board Game</p>
+        </div>
+
+        <div class="rules-body">
+
+          <!-- Goal -->
+          <div class="rules-section">
+            <div class="rules-section-header">
+              <span class="rules-icon">🎯</span>
+              <h3 class="rules-section-title">Goal of the Game</h3>
+            </div>
+            <p class="rules-text">Move all four of your marbles from your starting boxes, around the board, and into your <strong>home lane</strong>. First player to get all 4 marbles home wins.</p>
+          </div>
+
+          <!-- Players -->
+          <div class="rules-section">
+            <div class="rules-section-header">
+              <span class="rules-icon">👥</span>
+              <h3 class="rules-section-title">Players</h3>
+            </div>
+            <div class="rules-team-banner">
+              <span class="mm mm-red"></span>
+              <span class="mm mm-green"></span>
+              <span class="mm mm-blue"></span>
+              <span class="mm mm-orange"></span>
+            </div>
+            <p class="rules-note">4 players, every man for himself. First to get all 4 marbles into their home lane wins.</p>
+          </div>
+
+          <!-- How to Play -->
+          <div class="rules-section">
+            <div class="rules-section-header">
+              <span class="rules-icon">🎲</span>
+              <h3 class="rules-section-title">How to Play</h3>
+            </div>
+            <ul class="rules-list">
+              <li>Each player gets <strong>13 cards</strong> dealt over 3 rounds (5 · 4 · 4). Play proceeds clockwise.</li>
+              <li>On your turn, play <strong>one card</strong> and perform its action. You have <strong>30 seconds</strong> — time runs out, a move is played automatically.</li>
+              <li><strong>Entering:</strong> Play an <strong>A</strong> or <strong>K</strong> to place a marble on your start position.</li>
+              <li><strong>Capturing:</strong> Landing exactly on another marble sends it back to its starting box.</li>
+              <li><strong>Home lane:</strong> When passing your own start position, you enter the home lane. You must land <em>exactly</em> on a free slot — no overshooting.</li>
+              <li><strong>No legal move?</strong> Discard your entire hand and wait for the next deal.</li>
+            </ul>
+          </div>
+
+          <!-- Card Actions -->
+          <div class="rules-section">
+            <div class="rules-section-header">
+              <span class="rules-icon">🃏</span>
+              <h3 class="rules-section-title">Card Actions</h3>
+            </div>
+            <div class="ca-grid">
+              <div class="ca-tile ca-green">
+                <div class="ca-val">A</div>
+                <div class="ca-action">Enter a marble<br><em>or</em> move +1</div>
+              </div>
+              <div class="ca-tile ca-green">
+                <div class="ca-val">K</div>
+                <div class="ca-action">Enter a marble</div>
+              </div>
+              <div class="ca-tile ca-blue">
+                <div class="ca-val">Q</div>
+                <div class="ca-action">Move forward<br>+12 spaces</div>
+              </div>
+              <div class="ca-tile ca-orange">
+                <div class="ca-val">J</div>
+                <div class="ca-action">Swap your marble with any opponent's</div>
+              </div>
+              <div class="ca-tile ca-purple">
+                <div class="ca-val">7</div>
+                <div class="ca-action">Move 7 spaces — split across 2 marbles</div>
+              </div>
+              <div class="ca-tile ca-red">
+                <div class="ca-val">4</div>
+                <div class="ca-action">Move backward<br>−4 spaces</div>
+              </div>
+              <div class="ca-tile ca-muted ca-wide">
+                <div class="ca-val ca-val-sm">2 – 10</div>
+                <div class="ca-action">Move one marble forward by the card's face value</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Important Rules -->
+          <div class="rules-section">
+            <div class="rules-section-header">
+              <span class="rules-icon">⚠️</span>
+              <h3 class="rules-section-title">Important Rules</h3>
+            </div>
+            <div class="rules-alerts">
+              <div class="rules-alert">
+                <span class="alert-badge">🛡️</span>
+                <div><strong>Safe zones:</strong> A marble on its own start position is invincible — it blocks passage and cannot be captured or swapped. Home lane marbles are also safe.</div>
+              </div>
+              <div class="rules-alert">
+                <span class="alert-badge">🏠</span>
+                <div><strong>Home lane order:</strong> Marbles fill the home lane from the back slot forward. You cannot jump over your own marbles inside the lane.</div>
+              </div>
+              <div class="rules-alert">
+                <span class="alert-badge">🔄</span>
+                <div><strong>Jack restriction:</strong> Cannot swap with a marble that is on its own start position or already in a home lane.</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
 

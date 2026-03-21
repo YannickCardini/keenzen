@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IonContent } from '@ionic/angular/standalone';
+import { version } from '../../../../package.json';
 
 @Component({
   selector: 'app-home',
@@ -12,9 +13,11 @@ import { IonContent } from '@ionic/angular/standalone';
 })
 export class HomePage implements OnInit {
   readonly titleLetters = ['K', 'E', 'E', 'N', 'Z', 'E', 'N'];
+  readonly appVersion = version;
 
   showLogin = false;
   showSettings = false;
+  showRules = false;
   loginMode: 'login' | 'signup' = 'login';
 
   constructor() {}
@@ -26,4 +29,7 @@ export class HomePage implements OnInit {
 
   openSettings() { this.showSettings = true; }
   closeSettings() { this.showSettings = false; }
+
+  openRules() { this.showRules = true; }
+  closeRules() { this.showRules = false; }
 }
