@@ -1,4 +1,4 @@
-import { Component, signal, computed, effect, OnDestroy } from '@angular/core';
+import { Component, signal, computed, effect, OnDestroy, ViewChild } from '@angular/core';
 import { IonContent } from '@ionic/angular/standalone';
 import { BoardComponent } from './components/board/board.component';
 import { TableComponent } from './components/table/table.component';
@@ -16,6 +16,8 @@ import { NEW_TURN_BANNER_DURATION_MS, GameConfig } from '@keezen/shared';
   imports: [IonContent, BoardComponent, TableComponent, VictoryOverlayComponent],
 })
 export class GamePage implements OnDestroy {
+
+  @ViewChild(BoardComponent) private boardRef?: BoardComponent;
 
   showNewTurnBanner = signal(false);
   newTurnColor = signal<string>('');
@@ -75,6 +77,11 @@ export class GamePage implements OnDestroy {
   }
 
   ionViewDidEnter(): void {
+    if (this.gameStateService.isConnected()) {
+      // Déjà connecté via matchmaking — recalculer la taille du board après la transition Ionic
+      this.boardRef?.calculateSquareSize();
+      return;
+    }
     this.connect();
   }
 

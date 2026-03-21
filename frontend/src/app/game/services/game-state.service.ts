@@ -8,6 +8,7 @@ import {
   ActionPlayedMessage,
   ActionRejectedMessage,
   GameEndedMessage,
+  MatchmakingStatusMessage,
   AnimationDoneMessage,
   TurnTimeoutMessage,
   PlayActionMessage,
@@ -226,6 +227,10 @@ export class GameStateService {
   actionRejected$ = new Subject<string>();
   /** Émet la couleur du joueur dont le tour a expiré (timeout). */
   turnTimedOut$ = new Subject<MarbleColor>();
+  /** Émet à chaque mise à jour du matchmaking (nombre de joueurs connectés, couleur assignée). */
+  matchmakingStatus$ = new Subject<MatchmakingStatusMessage>();
+  /** Émet dès que le serveur envoie le premier état de jeu (partie démarrée). */
+  gameStarted$ = new Subject<void>();
 
   private ws: WebSocket | null = null;
 
@@ -268,9 +273,15 @@ export class GameStateService {
         case 'response': {
           const msg = parsed as GameStateMessage;
           this.data.set(msg);
+          this.gameStarted$.next();
           if (msg.message === 'New turn') {
             this.newTurn.next(new Date());
           }
+          break;
+        }
+
+        case 'matchmakingStatus': {
+          this.matchmakingStatus$.next(parsed as MatchmakingStatusMessage);
           break;
         }
 
@@ -338,6 +349,10 @@ export class GameStateService {
   sendTurnTimeout(): void {
     const msg: TurnTimeoutMessage = { type: 'turnTimeout' };
     this.send(JSON.stringify(msg));
+  }
+
+  sendJoinMatchmaking(playerName?: string): void {
+    this.send(JSON.stringify({ type: 'joinMatchmaking', playerName }));
   }
 
   send(message: string): void {

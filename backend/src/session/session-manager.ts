@@ -1,5 +1,6 @@
 import { Game } from '../game/game.js';
 import { SingleWsMessenger, MultiWsMessenger } from '../game/game-messenger.js';
+import { MatchmakingManager } from './matchmaking-manager.js';
 import type { GameConfig, MarbleColor } from '@keezen/shared';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ function generateRoomCode(): string {
 export class SessionManager {
 
     private rooms = new Map<string, PendingRoom>();
+    private matchmaking = new MatchmakingManager();
 
     /**
      * Démarre une partie immédiatement sur le WS courant.
@@ -108,6 +110,15 @@ export class SessionManager {
             console.log(`🚀 Room ${roomCode} complète — lancement de la partie`);
             new Game(room.config, room.messenger);
         }
+    }
+
+    /**
+     * Rejoint la file d'attente matchmaking publique.
+     * Le serveur assigne une couleur et démarre la partie dès que 4 joueurs sont là
+     * (ou remplit avec des bots après 30 s).
+     */
+    joinMatchmaking(ws: WebSocket, playerName?: string): void {
+        this.matchmaking.joinQueue(ws, playerName);
     }
 
     private broadcastRoomStatus(roomCode: string): void {

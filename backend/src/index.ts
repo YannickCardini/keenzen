@@ -44,6 +44,10 @@ wss.on('connection', (ws: WebSocket) => {
                     sessionManager.joinRoom(ws, msg.roomCode, msg.playerColor);
                     break;
 
+                case 'joinMatchmaking':
+                    sessionManager.joinMatchmaking(ws, msg.playerName);
+                    break;
+
                 default:
                     // playAction / animationDone avant la création d'une partie → ignoré
                     console.warn(`⚠️ Message inattendu avant 'start': ${(msg as ClientMessage).type}`);

@@ -145,6 +145,17 @@ export interface GameEndedMessage {
   winner: MarbleColor;
 }
 
+/**
+ * Envoyé par le serveur à chaque changement dans la session matchmaking.
+ * Chaque joueur reçoit sa propre couleur assignée.
+ */
+export interface MatchmakingStatusMessage {
+  type: 'matchmakingStatus';
+  connectedCount: number;
+  totalNeeded: number;
+  myColor: MarbleColor;
+}
+
 /** Envoyé au créateur d'une room multi-device */
 export interface RoomCreatedMessage {
   type: 'roomCreated';
@@ -166,7 +177,8 @@ export type ServerMessage =
   | ActionRejectedMessage
   | RoomCreatedMessage
   | WaitingForPlayersMessage
-  | GameEndedMessage;
+  | GameEndedMessage
+  | MatchmakingStatusMessage;
 
 // ── Messages WebSocket — Client → Serveur ─────────────────────────────────────
 
@@ -177,6 +189,16 @@ export type ServerMessage =
 export interface StartMessage {
   type: 'start';
   config: GameConfig;
+}
+
+/**
+ * Rejoint la file d'attente matchmaking publique.
+ * Le serveur assigne une couleur et lance la partie dès que 4 joueurs sont présents
+ * (ou remplit avec des bots après 30 s).
+ */
+export interface JoinMatchmakingMessage {
+  type: 'joinMatchmaking';
+  playerName?: string;
 }
 
 /**
@@ -227,6 +249,7 @@ export type ClientMessage =
   | StartMessage
   | CreateRoomMessage
   | JoinRoomMessage
+  | JoinMatchmakingMessage
   | PlayActionMessage
   | AnimationDoneMessage
   | TurnTimeoutMessage;

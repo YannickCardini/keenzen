@@ -630,6 +630,99 @@ $bg-mid:   #1a2840;
   }
 }
 
+// ─── Matchmaking card ─────────────────────────────────────────────────────────
+.matchmaking-card {
+  max-width: 340px;
+  text-align: center;
+}
+
+.mq-slots {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin: 8px 0 16px;
+}
+
+.mq-slot {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px dashed rgba(255,255,255,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.35s, transform 0.35s, box-shadow 0.35s;
+
+  .mm { width: 30px; height: 30px; }
+
+  &.mq-filled {
+    border-style: solid;
+    transform: scale(1.08);
+  }
+
+  &.mq-mine {
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.12),
+                0 0 18px rgba(255,255,255,0.08);
+  }
+
+  &.mq-slot-red.mq-filled    { border-color: rgba($c-red,    0.7); }
+  &.mq-slot-green.mq-filled  { border-color: rgba($c-green,  0.7); }
+  &.mq-slot-blue.mq-filled   { border-color: rgba($c-blue,   0.7); }
+  &.mq-slot-orange.mq-filled { border-color: rgba($c-orange, 0.7); }
+}
+
+.mq-empty {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  animation: mqEmptyPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes mqEmptyPulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.9; }
+}
+
+.mq-count {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+}
+
+.mq-hint {
+  margin: 0 0 16px;
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.38);
+  strong { color: rgba(255,255,255,0.6); }
+
+  &.mq-hint-launch { color: rgba($c-green, 0.7); }
+}
+
+.mq-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 20px;
+
+  span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    animation: mqDotBounce 1.2s ease-in-out infinite;
+
+    &:nth-child(2) { animation-delay: 0.2s; }
+    &:nth-child(3) { animation-delay: 0.4s; }
+  }
+}
+
+@keyframes mqDotBounce {
+  0%, 80%, 100% { transform: translateY(0);    opacity: 0.3; }
+  40%            { transform: translateY(-6px); opacity: 1;   }
+}
+
 // ─── Rules card ───────────────────────────────────────────────────────────────
 .rules-card {
   max-width: 440px;
