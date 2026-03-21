@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { GameStateService } from './../../services/game-state.service';
+import { GameStateService } from '../../services/game-state.service';
 import {
   Component,
   ChangeDetectionStrategy,
@@ -117,7 +117,7 @@ enum TURN_PHASE {
 
     return [1, 2, 3, 4, 5, 6, 7].map(dot => {
       const enabled = (dot < 7 && splitSteps.includes(dot))
-                   || (dot === 7 && allSteps.includes(7));
+        || (dot === 7 && allSteps.includes(7));
 
       let group: 'marble1' | 'marble2' | 'full';
       if (currentSplit === 7) {
