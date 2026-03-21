@@ -108,6 +108,29 @@ enum TURN_PHASE {
     });
   });
 
+  /** Data for the 7-dot connected bar UI. */
+  allSevenDots = computed(() => {
+    const splitSteps = this.validSplitSevenSteps();
+    const allSteps = this.validSevenSteps();
+    const currentSplit = this.gameStateService.sevenFirstSteps();
+
+    return [1, 2, 3, 4, 5, 6, 7].map(dot => {
+      const enabled = (dot < 7 && splitSteps.includes(dot))
+                   || (dot === 7 && allSteps.includes(7));
+
+      let group: 'marble1' | 'marble2' | 'full';
+      if (currentSplit === 7) {
+        group = 'full';
+      } else if (dot <= currentSplit) {
+        group = 'marble1';
+      } else {
+        group = 'marble2';
+      }
+
+      return { step: dot, enabled, group, isActive: currentSplit === dot };
+    });
+  });
+
   /** Bannière "temps écoulé" : couleur du joueur concerné, null = masqué */
   timeoutBannerColor = signal<MarbleColor | null>(null);
   private timeoutBannerTimeout?: ReturnType<typeof setTimeout>;

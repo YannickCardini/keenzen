@@ -504,62 +504,254 @@
     &.timeout-banner--orange { border-color: rgba(249, 115,  22, 0.5); color: #fdba74; background: rgba(249, 115, 22, 0.12); }
 }
 /* =========================================
-   7 SPLIT SELECTOR
+   7 SPLIT SELECTOR — Connected Dots Bar
    ========================================= */
-.seven-step-counter {
+.seven-split-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.25rem;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    z-index: 12;
+    animation: sevenBarSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+
+    &.seven-split-bar--split-active {
+        border-color: rgba(192, 132, 252, 0.3);
+        box-shadow: 0 0 20px rgba(192, 132, 252, 0.1);
+    }
+}
+
+@keyframes sevenBarSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.92);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ── Dots Row ── */
+.dots-row {
+    display: flex;
+    align-items: center;
+}
+
+/* ── Connector Lines ── */
+.dot-connector {
+    width: 1rem;
+    height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.12);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+
+    &.dot-connector--full {
+        background: rgba(192, 132, 252, 0.25);
+    }
+
+    &.dot-connector--marble1 {
+        background: var(--accent);
+        box-shadow: 0 0 6px var(--accent-glow);
+    }
+
+    &.dot-connector--marble2 {
+        background: var(--gold);
+        box-shadow: 0 0 6px rgba(251, 191, 36, 0.3);
+    }
+
+    &.dot-connector--split-point {
+        background: transparent;
+        box-shadow: none;
+        position: relative;
+
+        &::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 3px;
+            height: 12px;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+    }
+}
+
+/* ── Dot Buttons ── */
+.split-dot {
+    position: relative;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
-    padding: 0.5rem 1rem;
+    font-family: 'Playfair Display', serif;
+    transition:
+        background 0.25s ease,
+        border-color 0.25s ease,
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.25s ease;
 
-    .split-label {
-        font-size: 0.65rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--text-muted);
-        font-weight: 600;
-    }
-
-    .step-buttons-row {
-        display: flex;
-        gap: 0.35rem;
-    }
-
-    .step-select-btn {
-        width: 2rem;
-        height: 2rem;
-        border-radius: 50%;
-        border: 1px solid rgba(192, 132, 252, 0.35);
+    &.split-dot--full {
+        border-color: rgba(192, 132, 252, 0.25);
         background: rgba(192, 132, 252, 0.08);
-        color: var(--accent);
-        font-size: 0.85rem;
-        font-weight: 700;
-        font-family: 'DM Sans', sans-serif;
-        cursor: pointer;
-        transition: background 0.15s, transform 0.12s, border-color 0.15s, box-shadow 0.15s;
+    }
 
-        &:hover:not(.step-select-btn--active) {
-            background: rgba(192, 132, 252, 0.2);
-            border-color: var(--accent);
-            transform: scale(1.12);
+    &.split-dot--full.split-dot--is-seven {
+        border-color: rgba(192, 132, 252, 0.45);
+        background: rgba(192, 132, 252, 0.15);
+    }
+
+    &.split-dot--marble1 {
+        border-color: var(--accent);
+        background: rgba(192, 132, 252, 0.3);
+        box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    &.split-dot--marble2 {
+        border-color: var(--gold);
+        background: rgba(251, 191, 36, 0.2);
+        box-shadow: 0 0 8px rgba(251, 191, 36, 0.25);
+    }
+
+    &.split-dot--active {
+        transform: scale(1.25);
+        z-index: 2;
+
+        &.split-dot--marble1 {
+            background: var(--accent);
+            box-shadow: 0 0 16px var(--accent-glow), 0 0 32px rgba(192, 132, 252, 0.2);
         }
 
-        &.step-select-btn--active {
+        &.split-dot--marble2 {
+            background: var(--gold);
+            border-color: var(--gold);
+            box-shadow: 0 0 16px rgba(251, 191, 36, 0.45), 0 0 32px rgba(251, 191, 36, 0.15);
+        }
+
+        &.split-dot--full {
             background: var(--accent);
             border-color: var(--accent);
-            color: #0f172a;
-            box-shadow: 0 0 12px var(--accent-glow);
-            transform: scale(1.15);
+            box-shadow: 0 0 14px var(--accent-glow);
         }
     }
 
-    .split-summary {
-        font-size: 0.9rem;
-        font-weight: 700;
-        color: var(--accent);
-        font-family: 'Playfair Display', serif;
-        min-width: 3rem;
-        text-align: center;
+    &:disabled {
+        opacity: 0.2;
+        cursor: not-allowed;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    &:not(:disabled):not(.split-dot--active):hover {
+        transform: scale(1.12);
+        border-color: rgba(255, 255, 255, 0.4);
+        background: rgba(255, 255, 255, 0.12);
+    }
+}
+
+/* ── Dot Number Label ── */
+.split-dot__number {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1;
+    pointer-events: none;
+    transition: color 0.25s ease;
+
+    .split-dot--marble1 & {
+        color: white;
+    }
+
+    .split-dot--marble2 & {
+        color: #1a1a2e;
+    }
+
+    .split-dot--active & {
+        color: #0f172a;
+    }
+
+    .split-dot:disabled & {
+        color: rgba(255, 255, 255, 0.25);
+    }
+}
+
+/* ── Split Info / Summary ── */
+.split-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 1.2rem;
+}
+
+.split-info__marble1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-shadow: 0 0 8px var(--accent-glow);
+}
+
+.split-info__divider {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.25);
+    font-weight: 300;
+}
+
+.split-info__marble2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--gold);
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+}
+
+.split-info__hint {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    font-weight: 500;
+    animation: hintFade 3s ease forwards;
+}
+
+@keyframes hintFade {
+    0%, 70% { opacity: 1; }
+    100%    { opacity: 0.4; }
+}
+
+/* ── Responsive ── */
+@container game-board (max-width: 360px) {
+    .seven-split-bar {
+        padding: 0.4rem 0.75rem;
+        gap: 0.3rem;
+    }
+
+    .split-dot {
+        width: 1.6rem;
+        height: 1.6rem;
+    }
+
+    .dot-connector {
+        width: 0.5rem;
+    }
+
+    .split-dot__number {
+        font-size: 0.65rem;
     }
 }
