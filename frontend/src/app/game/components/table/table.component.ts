@@ -138,8 +138,12 @@ enum TURN_PHASE {
 
   /** Bannière "temps écoulé" : couleur du joueur concerné, null = masqué */
   timeoutBannerColor = signal<MarbleColor | null>(null);
+  /** Bannière "joueur déconnecté" : couleur du joueur auto-joué, null = masqué */
+  autoPlayBannerColor = signal<MarbleColor | null>(null);
   private timeoutBannerTimeout?: ReturnType<typeof setTimeout>;
+  private autoPlayBannerTimeout?: ReturnType<typeof setTimeout>;
   private timeoutSub?: Subscription;
+  private autoPlaySub?: Subscription;
 
   // ── Dérivés ────────────────────────────────────────────────────
 
@@ -194,12 +198,18 @@ enum TURN_PHASE {
     this.timeoutSub = this.gameStateService.turnTimedOut$.subscribe((color) => {
       this.showTimeoutBanner(color);
     });
+
+    this.autoPlaySub = this.gameStateService.autoPlayed$.subscribe((color) => {
+      this.showAutoPlayBanner(color);
+    });
   }
 
   ngOnDestroy(): void {
     this.clearTimer();
     this.timeoutSub?.unsubscribe();
+    this.autoPlaySub?.unsubscribe();
     if (this.timeoutBannerTimeout) clearTimeout(this.timeoutBannerTimeout);
+    if (this.autoPlayBannerTimeout) clearTimeout(this.autoPlayBannerTimeout);
   }
 
   private updateTurnPhase() {
@@ -268,6 +278,14 @@ enum TURN_PHASE {
     this.timeoutBannerColor.set(color);
     this.timeoutBannerTimeout = setTimeout(() => {
       this.timeoutBannerColor.set(null);
+    }, 4000);
+  }
+
+  private showAutoPlayBanner(color: MarbleColor): void {
+    if (this.autoPlayBannerTimeout) clearTimeout(this.autoPlayBannerTimeout);
+    this.autoPlayBannerColor.set(color);
+    this.autoPlayBannerTimeout = setTimeout(() => {
+      this.autoPlayBannerColor.set(null);
     }, 4000);
   }
 

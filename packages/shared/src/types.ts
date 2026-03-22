@@ -135,6 +135,8 @@ export interface ActionPlayedMessage {
   timestamp: string;
   action: Action;
   isTimeout?: boolean;
+  /** True when the action was auto-played because the human player is disconnected. */
+  isAutoPlay?: boolean;
 }
 
 /** Envoyé quand le serveur rejette une action humaine invalide */

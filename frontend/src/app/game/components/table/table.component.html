@@ -12,6 +12,14 @@
   </div>
   }
 
+  <!-- ===== BANNIÈRE AUTO-PLAY (joueur déconnecté) ===== -->
+  @if (autoPlayBannerColor(); as color) {
+  <div class="timeout-banner" [ngClass]="'timeout-banner--' + color">
+    <span class="timeout-icon">🤖</span>
+    <span>{{ color }} disconnected — a bot played for them</span>
+  </div>
+  }
+
   <!-- ===== RESIGN BUTTON (top-right corner) ===== -->
   @if (gameStateService.myPlayerColor()) {
   <button class="resign-btn" (click)="onResign()" title="Resign">

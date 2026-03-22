@@ -235,6 +235,8 @@ export class GameStateService {
   actionRejected$ = new Subject<string>();
   /** Émet la couleur du joueur dont le tour a expiré (timeout). */
   turnTimedOut$ = new Subject<MarbleColor>();
+  /** Émet la couleur du joueur déconnecté pour lequel un coup a été joué automatiquement. */
+  autoPlayed$ = new Subject<MarbleColor>();
   /** Émet à chaque mise à jour du matchmaking (nombre de joueurs connectés, couleur assignée). */
   matchmakingStatus$ = new Subject<MatchmakingStatusMessage>();
   /** Émet dès que le serveur envoie le premier état de jeu (partie démarrée). */
@@ -277,6 +279,7 @@ export class GameStateService {
         case 'actionPlayed': {
           const msg = parsed as ActionPlayedMessage;
           if (msg.isTimeout) this.turnTimedOut$.next(msg.action.playerColor);
+          if (msg.isAutoPlay) this.autoPlayed$.next(msg.action.playerColor);
           this.actionPlayed$.next(msg.action);
           break;
         }

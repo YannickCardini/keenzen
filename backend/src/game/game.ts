@@ -170,10 +170,22 @@ export class Game {
         // 2️⃣ Attendre l'action du joueur/IA
         // Main vide → pass immédiat, pas besoin d'attendre (humain ou IA)
         this.pendingTimeoutAction = null;
-        const move = player.handEmpty()
-            ? { type: 'pass' as const, from: 0, to: 0, cardPlayed: null, playerColor: player.color }
-            : await this.waitForActionOrTimeout(player, marblesByColor);
-        const isTimeout = this.pendingTimeoutAction !== null;
+        let move: Action;
+        let isTimeout = false;
+        let isAutoPlay = false;
+
+        if (player.handEmpty()) {
+            move = { type: 'pass' as const, from: 0, to: 0, cardPlayed: null, playerColor: player.color };
+        } else if (player.isHuman && !player.isConnected) {
+            // Joueur humain déconnecté → coup automatique immédiat (pas d'attente 32s)
+            console.log(`🤖 ${player.name} est déconnecté — coup automatique`);
+            move = this.computeFallbackAction(player);
+            isAutoPlay = true;
+        } else {
+            move = await this.waitForActionOrTimeout(player, marblesByColor);
+            isTimeout = this.pendingTimeoutAction !== null;
+        }
+
         this.pendingTimeoutAction = null;
         const enrichedMove: Action = { ...move, playerColor: player.color };
 
@@ -183,7 +195,7 @@ export class Game {
         this.updateDiscardedCards(enrichedMove);
 
         // 4️⃣ Broadcast de l'action (pour animation carte + pion côté front)
-        this.broadcastAction(enrichedMove, isTimeout);
+        this.broadcastAction(enrichedMove, isTimeout, isAutoPlay);
 
         // 5️⃣ Attendre confirmation des animations (ou timeout fallback)
         await this.waitForAnimationsOrTimeout();
@@ -453,12 +465,13 @@ export class Game {
 
     // ─── Broadcast ───────────────────────────────────────────────────────────
 
-    private broadcastAction(action: Action, isTimeout = false): void {
+    private broadcastAction(action: Action, isTimeout = false, isAutoPlay = false): void {
         this.messenger.send({
             type: 'actionPlayed',
             timestamp: new Date().toISOString(),
             action,
             isTimeout,
+            isAutoPlay,
         });
     }
 
