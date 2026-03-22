@@ -1,171 +1,161 @@
-================================================================================
-                              KEENZEN - TODO LIST
-================================================================================
+==============================================================================
+  KEENZEN — TODO LIST
+==============================================================================
 
-Each task is numbered [T-XX] for easy reference.
-Priority: HIGH = blocks normal gameplay, MEDIUM = quality of life, LOW = polish.
+------------------------------------------------------------------------------
+[1] Generate a random display name for guest players (no account)
+------------------------------------------------------------------------------
+Context:
+  - In home.page.ts:74, `sendJoinMatchmaking('Player')` is hardcoded.
+  - The backend matchmaking-manager.ts accepts the player name via the
+    `JoinMatchmakingMessage.playerName` field and uses it as-is.
+  - There is no name input in the matchmaking modal; the player plays as guest.
 
-================================================================================
-  SECTION 1: RECONNECTION & SESSION IDENTITY
-================================================================================
+Tasks:
+  - In home.page.ts, before calling `sendJoinMatchmaking()`, generate a random
+    fun/readable guest name (e.g. adjective + animal + number:
+    "SwiftFox42", "BoldPanda7"). The function can live in a small utility file.
+  - Pass the generated name to `sendJoinMatchmaking(generatedName)` instead of
+    the hardcoded string 'Player'.
+  - Verify that session-manager.ts `startSingleDevice()` and `createRoom()`
+    also handle a guest name if a name input is later added to those flows.
 
-[T-01] Display the local player's color in the game UI (MEDIUM)
-  Context: When a player reconnects to a game (page refresh or reopening the
-  app), the game state is restored via `resendStateToPlayer()` and the board
-  renders correctly, but the player has no visual indication of which color
-  they are controlling.
-  Steps:
-    - In the TableComponent (frontend/src/app/game/components/table/),
-      display the local player's color prominently (e.g. "You are playing as
-      RED" or a colored badge).
-    - The value is available via `gameStateService.myPlayerColor` signal.
-    - Ensure this indicator is visible at all times during the game, not just
-      on reconnection.
+------------------------------------------------------------------------------
+[2] Clean up the matchmaking modal: hide the bot countdown and bot text
+------------------------------------------------------------------------------
+Context:
+  - home.page.html lines 261–266 display two messages:
+      • "Bots will fill in in <N>s" (while matchmakingSecondsLeft > 0)
+      • "Launching with bots…"   (when matchmakingSecondsLeft === 0)
+  - home.page.ts starts a local 30-second countdown immediately on
+    `openMatchmaking()`, independently of the server.
+  - The design goal is: the user should NOT know that bots may fill the game,
+    and the countdown timer should NOT be visible in the matchmaking popup.
 
-[T-02] Restore full game control after reconnection (HIGH)
-  Context: When a player refreshes the page or reconnects to their game
-  instance, the board is displayed but the player cannot interact with it
-  (cannot select cards or marbles, cannot play actions). The reconnection
-  flow (AppComponent detects localStorage keys -> sends JoinGameMessage ->
-  server rebinds WebSocket via MultiWsMessenger.reconnect() -> game calls
-  resendStateToPlayer()) restores the visual state but does not fully
-  restore the interactive state on the frontend.
-  Steps:
-    - Investigate why the frontend is not interactive after reconnection.
-      Likely causes:
-        a) The `myPlayerColor` signal is not set after reconnection (it may
-           only be set on WelcomeMessage, not on JoinGame response).
-        b) The `isMyTurn` computed signal may not resolve correctly if
-           `myPlayerColor` is null/undefined.
-        c) The game component route may not be navigated to after reconnection.
-    - Ensure that after a successful JoinGame reconnection, the frontend:
-        a) Sets `myPlayerColor` from the server response.
-        b) Navigates to the game view if not already there.
-        c) Re-enables card/marble selection and action submission.
-    - Test: Refresh the page mid-game during your turn -> you should be able
-      to select a card and play immediately.
+Tasks:
+  - Remove (or permanently hide with `*ngIf="false"`) both `<p class="mq-hint">`
+    elements in the matchmaking modal (home.page.html lines 261–266).
+  - Remove or keep inactive the `matchmakingSecondsLeft` countdown logic in
+    home.page.ts (lines 30, 70, 90–94). The countdown interval can be removed
+    entirely since it is only used to drive the now-removed display.
+  - Do NOT reveal to the user that bots will join. The modal should simply show
+    the player slots filling up, with no timing information.
 
-================================================================================
-  SECTION 2: MULTIPLE TABS / DUPLICATE SESSIONS
-================================================================================
+------------------------------------------------------------------------------
+[3] Freeze the timer after the player confirms or discards their action
+------------------------------------------------------------------------------
+Context:
+  - In table.component.ts, `startTimer()` runs a `setInterval` that ticks every
+    second. It is only cleared on `onTimeUp()` or when a new turn starts via
+    `gameStateService.newTurn.subscribe(() => startTimer())`.
+  - `onConfirmOrDiscard()` (table.component.ts) calls `gameStateService.playAction()`
+    which sends the move to the server, but does NOT stop or freeze the timer.
+  - The countdown sound (`playCountdownTick`) keeps playing even after the player
+    has already sent their action (lines 253–255).
+  - The server controls the actual turn timeout independently; the client timer
+    is only a local visual aid.
 
-[T-03] Prevent multiple matchmaking entries from the same browser (HIGH)
-  Context: If a user opens multiple browser tabs and clicks "Play Now" in
-  each, every tab opens its own WebSocket and sends a JoinMatchmakingMessage.
-  The MatchmakingManager treats each connection as a separate player, creating
-  multiple player slots for the same person. Since localStorage stores only
-  one `guest_player_id` and `active_game_id`, earlier entries get overwritten,
-  leading to orphaned game slots and potential self-play (matched against
-  yourself).
-  Steps:
-    - Option A (frontend): Use a BroadcastChannel or localStorage event
-      listener to detect if another tab is already in matchmaking or in a
-      game. If so, block "Play Now" and show a message like "You are already
-      in a game in another tab."
-    - Option B (backend): In MatchmakingManager, track players by a stable
-      browser identity (e.g. a persistent `browserId` stored in localStorage
-      and sent with each connection). Reject duplicate matchmaking joins from
-      the same browserId.
-    - Option C (combined): Implement both for defense in depth.
-  Expected result: A user clicking "Play Now" in two tabs should only create
-  one matchmaking entry. The second tab should be informed that they are
-  already queued or in a game.
+Tasks:
+  a. In `onConfirmOrDiscard()`, after calling `gameStateService.playAction()`:
+       - Call `clearTimer()` to stop the setInterval.
+       - Leave `timeLeft` signal at its current frozen value (do NOT reset to 0).
+       - This visually freezes the SVG arc at the current position.
+  b. Ensure `playCountdownTick()` is no longer called after the action is sent
+     (clearing the interval is sufficient since the sound is triggered inside
+     the interval callback).
+  c. The timer will restart naturally when the backend sends the next turn and
+     `gameStateService.newTurn` emits, which already calls `startTimer()`.
+  d. No server-side changes are needed.
 
-[T-04] Handle multiple tabs connected to the same game (MEDIUM)
-  Context: If two tabs are open for the same game, both send JoinGameMessage
-  with the same guestPlayerId. MultiWsMessenger stores one WebSocket per
-  color, so the second tab overwrites the first. The first tab silently loses
-  its connection and becomes a dead view. Both tabs may try to send actions,
-  causing race conditions.
-  Steps:
-    - When MultiWsMessenger.reconnect() is called and there is already an
-      active (non-closed) WebSocket for that color, close the old WebSocket
-      with a specific close code/reason (e.g. "replaced by new connection").
-    - On the frontend, handle this close code by showing a message like
-      "This game session was opened in another tab" and redirect to home.
-    - Alternatively, prevent the second tab from connecting at all (see T-03
-      Option A with BroadcastChannel).
+------------------------------------------------------------------------------
+[4] Add a navigation guard on the /game route
+------------------------------------------------------------------------------
+Context:
+  - app.routes.ts has no guard on `{ path: 'game', ... }`. Navigating directly
+    to /game in the browser URL bar loads GamePage immediately, which attempts
+    to start a new game even when no valid session exists.
+  - game-state.service.ts stores `activeGameId` (signal) and `guestPlayerId`
+    (signal), both persisted in localStorage under keys `active_game_id` and
+    `guest_player_id` (set in the 'welcome' WebSocket message handler).
+  - `sendJoinGame(guestPlayerId, gameId)` is used for reconnection.
 
-================================================================================
-  SECTION 3: GAME ABANDONMENT
-================================================================================
+Tasks:
+  a. Create `frontend/src/app/game/game.guard.ts` as a functional Angular guard:
+       - Inject `GameStateService` and `Router`.
+       - Read `localStorage.getItem('active_game_id')` and
+         `localStorage.getItem('guest_player_id')`.
+       - If BOTH values are present: allow navigation (return `true`).
+         The game page's existing reconnection logic will handle rejoining.
+       - If either is missing: redirect to `/home` (return `router.createUrlTree(['/home'])`).
+         Optionally store a flag/state that home.page.ts can read to display
+         a brief message like "Start or join a game to play."
+  b. In app.routes.ts, add `canActivate: [gameGuard]` to the `/game` route.
+  c. Do NOT trigger a new WebSocket connection inside the guard itself; let the
+     game page's existing `ngOnInit` reconnection flow handle that.
 
-[T-05] Add a "Resign / Abandon" button to the game UI (MEDIUM)
-  Steps:
-    - Add a new WebSocket message type `AbandonGameMessage` in
-      packages/shared/src/types.ts (client -> server).
-    - Add a UI button in the TableComponent (e.g. a "Resign" button in a
-      menu or corner of the screen). Ask for confirmation before sending.
-    - On the frontend, send `AbandonGameMessage` when confirmed.
-    - On the backend (Game class), handle this message:
-        a) Mark the player as disconnected (`player.isConnected = false`).
-        b) Close their WebSocket connection.
-        c) Remove their entry from `playerIdentities` so they cannot rejoin.
-        d) Check if the game should be aborted (see T-06).
-    - After abandoning, navigate the player back to the home screen and
-      clear `guest_player_id` and `active_game_id` from localStorage.
+------------------------------------------------------------------------------
+[5] Improve the disconnected-player visual in the player-info panels
+------------------------------------------------------------------------------
+Context:
+  - `Player.isConnected` (boolean) is available in the shared types
+    (packages/shared/src/types.ts).
+  - board.component.html applies `[class.disconnected]` when `!player.isConnected`.
+  - The current `.disconnected` CSS style (greying out) looks identical to the
+    "player has no cards / is skipping their turn" state, which is also greyed
+    out. This causes visual ambiguity.
+  - The design goal: make the disconnected state clearly distinct, visually
+    explicit, but still harmonious with the overall UI aesthetic.
 
-[T-06] Abort game when no human players remain (HIGH)
-  Context: Currently, when a player disconnects permanently (180s reconnect
-  window expires), `game.markDisconnected(color)` sets `isConnected = false`
-  but the game loop continues indefinitely with the disconnected player as a
-  "ghost." There is no logic to stop the game when all human players have
-  left.
-  Steps:
-    - In the Game class, after any player is marked as disconnected (either
-      via permanent disconnect timeout or explicit abandon from T-05):
-        a) Count remaining connected human players:
-           `players.filter(p => p.isHuman && p.isConnected).length`
-        b) If count === 0, abort the game immediately.
-    - When aborting:
-        a) Break out of the game loop cleanly (e.g. set a flag checked in
-           the main loop, or resolve/reject pending promises).
-        b) Send a `GameEndedMessage` to any still-connected clients with a
-           reason like "game_abandoned" (may need to add a reason field to
-           GameEndedMessage or create a new GameAbortedMessage).
-        c) Remove the game from GameRegistry.
-        d) Clean up all related entries in `playerIdentities`.
-    - Also consider: if only one human remains and they are playing against
-      bots, the game can still continue (bots don't disconnect). Only abort
-      when zero humans are connected.
-    - Edge case: a human disconnects, the 180s timer starts, and during that
-      window the last other human also disconnects. Both timers may fire.
-      Ensure the abort logic is idempotent and handles concurrent disconnects.
+Tasks:
+  a. Design a distinct visual treatment for `.disconnected` in
+     board.component.scss (or the relevant SCSS file) that differs from the
+     "no cards / skipping" style. Suggested options (choose one or combine):
+       - Overlay a small "wifi off" SVG icon on the player-info panel.
+       - Add a dashed or animated border (e.g., slow pulse in a neutral color).
+       - Add a small "Disconnected" text badge beneath the player avatar.
+       - Use a different opacity/color combination distinct from the skip state.
+  b. Do NOT simply change the opacity or grey level — the result must be
+     immediately distinguishable from the skip-turn state at a glance.
+  c. Preserve the existing `.disconnected` class binding in board.component.html;
+     only update the SCSS rules and optionally add HTML elements conditionally
+     shown via `*ngIf="player && !player.isConnected"`.
 
-================================================================================
-  SECTION 4: DISCONNECTED PLAYER BEHAVIOR DURING GAME
-================================================================================
+------------------------------------------------------------------------------
+[6] Tie the timer animation to the current-turn player
+------------------------------------------------------------------------------
+Context:
+  - The SVG ring timer in table.component.ts (`timerCircumference`, `timerDashOffset`,
+    `timerColor`) currently always displays when a turn is active, regardless of
+    whose turn it is. The player must infer from context which player is active.
+  - `gameStateService.isMyTurn()` returns true only when it is the local user's
+    turn. `displayedGameData()?.gameState.currentTurn` holds the active player's
+    color.
+  - board.component.html has player-info panels placed at each side of the board
+    via `PLAYER_INFO_STARTS` positions.
+  - The proposed design (from the original note):
+      • On the board: show an animated circular arc/ring rotating around the
+        player-info panel of the CURRENT TURN player (all 4 players' turns).
+      • In the table component: show/animate the SVG ring timer ONLY when it is
+        the LOCAL user's turn. Grey it out or hide it during other players' turns.
 
-[T-07] Auto-play for disconnected human players (MEDIUM)
-  Context: When a human player disconnects but the game is not aborted
-  (because other humans are still playing), the game loop currently hangs
-  waiting for that player's action via WebSocket, until the server-side
-  timeout fires (TURN_DURATION_MS + TURN_TIMEOUT_OFFSET_MS = ~32s). This
-  causes a long delay every time it is the disconnected player's turn.
-  Steps:
-    - In `playOneTurn()`, before waiting for a human action, check if the
-      current player is `isHuman && !isConnected`.
-    - If so, skip the WebSocket wait entirely and immediately play an
-      auto-action (use the same fallback logic as the timeout handler:
-      best legal move or discard).
-    - Alternatively, replace the disconnected human's strategy with the AI
-      strategy (BotPlayer) for the remainder of the game.
-    - Notify remaining connected players that "Player X has disconnected,
-      a bot is playing for them" (add a new message type or a field in
-      GameStateMessage).
-
-================================================================================
-  SECTION 5: CLEANUP & EDGE CASES
-================================================================================
-
-[T-08] Clean up stale localStorage on game end (LOW)
-  Context: When a game ends normally (a player wins), the frontend should
-  clear `guest_player_id` and `active_game_id` from localStorage. If not
-  cleared, the next time the user opens the app, AppComponent will try to
-  reconnect to a game that no longer exists.
-  Steps:
-    - On receiving `GameEndedMessage` in GameStateService, call
-      `localStorage.removeItem('guest_player_id')` and
-      `localStorage.removeItem('active_game_id')`.
-    - On the backend, when a game ends, clean up the corresponding entries
-      in `playerIdentities` and remove the game from `GameRegistry`.
+Tasks:
+  a. In board.component.html/scss:
+       - For each player-info cell, conditionally add a CSS animation class
+         (e.g., `[class.active-turn-ring]="isCurrentTurn(player.color)"`) that
+         renders a rotating arc or pulsing ring around the panel.
+       - The animation should use `gameStateService.data()?.gameState.currentTurn`
+         to determine which panel gets the ring.
+       - The ring should NOT show any countdown number; it is purely decorative/
+         indicative. Use a CSS animation (e.g., rotating border or conic-gradient)
+         rather than the SVG timer logic.
+  b. In table.component.html/scss:
+       - Wrap the SVG ring timer with `*ngIf="gameStateService.isMyTurn()"` OR
+         apply a `[class.timer-inactive]` class when it is NOT the local player's
+         turn, visually dimming/greying the timer.
+       - The countdown sound (`playCountdownTick`) already plays only on the
+         local player's turn (line 253 — `isMyTurn()` check is already in place).
+       - The SVG arc animation (`timerDashOffset`, `timerColor`) can remain as-is
+         but should only be prominent/colored during the local player's turn.
+  c. Coordinate the two animations: the board ring indicates whose turn it is
+     globally; the table timer tells the local player how much time they have
+     left. They serve different purposes and can coexist.
