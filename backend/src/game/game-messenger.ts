@@ -85,15 +85,27 @@ export class MultiWsMessenger implements GameMessenger {
     }
 
     /**
-     * Rebind a new WebSocket to an existing player slot during the reconnection window.
-     * Returns true on success, false if no pending disconnect exists for that color.
+     * Rebind a new WebSocket to an existing player slot.
+     * Handles two cases:
+     *  1. Player disconnected and reconnects within the 180s window (timer pending).
+     *  2. Another tab connects while the first is still active (force-replace).
+     * Returns true on success, false if no active/pending connection exists for that color.
      */
     reconnect(color: MarbleColor, ws: WebSocket): boolean {
         const timer = this.disconnectTimers.get(color);
-        if (!timer) return false;
+        const existing = this.connections.get(color);
 
-        clearTimeout(timer);
-        this.disconnectTimers.delete(color);
+        if (timer) {
+            // Case 1: reconnecting within the 180s window
+            clearTimeout(timer);
+            this.disconnectTimers.delete(color);
+        } else if (existing) {
+            // Case 2: another tab still connected — close old connection
+            existing.close(4001, 'Session opened in another tab');
+        } else {
+            // No timer and no active connection — nothing to reconnect to
+            return false;
+        }
 
         this.connections.set(color, ws);
         this.registerCloseHandler(color, ws);

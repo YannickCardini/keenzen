@@ -47,7 +47,7 @@ wss.on('connection', (ws: WebSocket) => {
                     break;
 
                 case 'joinMatchmaking':
-                    sessionManager.joinMatchmaking(ws, msg.playerName);
+                    sessionManager.joinMatchmaking(ws, msg.playerName, msg.browserId);
                     break;
 
                 case 'joinGame': {

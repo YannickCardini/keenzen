@@ -22,6 +22,7 @@ interface MatchPlayer {
     color: MarbleColor;
     name: string;
     guestPlayerId: string;
+    browserId?: string;
 }
 
 interface PendingMatchmaking {
@@ -35,7 +36,7 @@ export class MatchmakingManager {
 
     private session: PendingMatchmaking | null = null;
 
-    joinQueue(ws: WebSocket, playerName: string = 'Player', playerIdentities?: Map<string, { gameId: string; color: MarbleColor }>): void {
+    joinQueue(ws: WebSocket, playerName: string = 'Player', playerIdentities?: Map<string, { gameId: string; color: MarbleColor }>, browserId?: string): void {
         if (!this.session) {
             this.session = {
                 messenger: new MultiWsMessenger(),
@@ -47,6 +48,12 @@ export class MatchmakingManager {
         // Update reference if provided (in case session already existed)
         if (playerIdentities) this.session.playerIdentities = playerIdentities;
 
+        // Reject duplicate joins from the same browser
+        if (browserId && this.session.players.some(p => p.browserId === browserId)) {
+            ws.send(JSON.stringify({ type: 'actionRejected', reason: 'Already in matchmaking from another tab' }));
+            return;
+        }
+
         const takenColors = new Set(this.session.players.map(p => p.color));
         const color = COLORS.find(c => !takenColors.has(c));
 
@@ -56,7 +63,7 @@ export class MatchmakingManager {
         }
 
         const guestPlayerId = crypto.randomUUID();
-        const player: MatchPlayer = { ws, color, name: playerName, guestPlayerId };
+        const player: MatchPlayer = { ws, color, name: playerName, guestPlayerId, ...(browserId ? { browserId } : {}) };
         this.session.players.push(player);
         this.session.messenger.addConnection(color, ws);
 

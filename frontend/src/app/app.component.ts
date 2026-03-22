@@ -2,6 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { IonApp, IonRouterOutlet, NavController } from '@ionic/angular/standalone';
 import { take } from 'rxjs';
 import { GameStateService } from './game/services/game-state.service';
+import { TabLockService } from './game/services/tab-lock.service';
 import { environment } from '../environments/environment';
 
 @Component({
@@ -12,13 +13,25 @@ import { environment } from '../environments/environment';
 export class AppComponent implements OnInit {
 
   private gameStateService = inject(GameStateService);
+  private tabLock = inject(TabLockService);
   private navCtrl = inject(NavController);
 
-  ngOnInit(): void {
+  async ngOnInit(): Promise<void> {
+    // Handle session replaced by another tab (close code 4001)
+    this.gameStateService.sessionReplaced$.subscribe(() => {
+      this.navCtrl.navigateRoot(['/home']);
+    });
+
     const guestPlayerId = localStorage.getItem('guest_player_id');
     const activeGameId = localStorage.getItem('active_game_id');
 
     if (guestPlayerId && activeGameId) {
+      // If another tab already manages this game, don't reconnect
+      if (await this.tabLock.isOtherTabActive()) {
+        return;
+      }
+
+      this.tabLock.claimSession();
       this.gameStateService.connect(environment.wsUrl, () => {
         this.gameStateService.sendJoinGame(guestPlayerId, activeGameId);
       });
@@ -30,6 +43,7 @@ export class AppComponent implements OnInit {
 
       this.gameStateService.actionRejected$.pipe(take(1)).subscribe(() => {
         localStorage.removeItem('active_game_id');
+        this.tabLock.releaseSession();
         this.gameStateService.disconnect();
       });
     }

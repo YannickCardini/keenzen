@@ -1,5 +1,6 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
+import { TabLockService } from './tab-lock.service';
 import {
   Action,
   Card,
@@ -238,7 +239,10 @@ export class GameStateService {
   matchmakingStatus$ = new Subject<MatchmakingStatusMessage>();
   /** Émet dès que le serveur envoie le premier état de jeu (partie démarrée). */
   gameStarted$ = new Subject<void>();
+  /** Émet quand le serveur ferme la connexion car un autre onglet a pris la relève (code 4001). */
+  sessionReplaced$ = new Subject<void>();
 
+  private tabLock = inject(TabLockService);
   private ws: WebSocket | null = null;
 
   constructor() {
@@ -335,13 +339,20 @@ export class GameStateService {
           const msg = parsed as GameEndedMessage;
           this.winner.set(msg.winner);
           localStorage.removeItem('active_game_id');
+          this.tabLock.releaseSession();
           break;
         }
       }
     };
 
     this.ws.onerror = () => this.isConnected.set(false);
-    this.ws.onclose = () => this.isConnected.set(false);
+    this.ws.onclose = (event: CloseEvent) => {
+      this.isConnected.set(false);
+      if (event.code === 4001) {
+        this.tabLock.releaseSession();
+        this.sessionReplaced$.next();
+      }
+    };
   }
 
   // ── Configuration de partie ───────────────────────────────────────────────
@@ -381,7 +392,12 @@ export class GameStateService {
   }
 
   sendJoinMatchmaking(playerName?: string): void {
-    this.send(JSON.stringify({ type: 'joinMatchmaking', playerName }));
+    let browserId = localStorage.getItem('browser_id');
+    if (!browserId) {
+      browserId = crypto.randomUUID();
+      localStorage.setItem('browser_id', browserId);
+    }
+    this.send(JSON.stringify({ type: 'joinMatchmaking', playerName, browserId }));
   }
 
   sendJoinGame(guestPlayerId: string, activeGameId: string): void {

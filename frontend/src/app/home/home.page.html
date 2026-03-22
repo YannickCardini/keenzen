@@ -39,6 +39,11 @@
         </div>
       </div>
 
+      <!-- Duplicate tab warning -->
+      <div class="duplicate-tab-banner" *ngIf="duplicateTabMessage">
+        You are already in a game or matchmaking in another tab.
+      </div>
+
       <!-- Action buttons -->
       <div class="hero-actions">
         <button class="action-btn play-btn" (click)="openMatchmaking()">

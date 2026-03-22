@@ -204,6 +204,8 @@ export interface StartMessage {
 export interface JoinMatchmakingMessage {
   type: 'joinMatchmaking';
   playerName?: string;
+  /** Persistent browser identity used to prevent duplicate matchmaking entries from the same browser. */
+  browserId?: string;
 }
 
 /**

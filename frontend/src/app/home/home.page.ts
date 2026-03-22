@@ -5,6 +5,7 @@ import { IonContent, NavController } from '@ionic/angular/standalone';
 import { Subscription, take } from 'rxjs';
 import { version } from '../../../../package.json';
 import { GameStateService } from '../game/services/game-state.service';
+import { TabLockService } from '../game/services/tab-lock.service';
 import type { MarbleColor } from '@keezen/shared';
 import { environment } from 'src/environments/environment';
 
@@ -33,7 +34,10 @@ export class HomePage implements OnInit, OnDestroy {
   private gameStartSub: Subscription | null = null;
   private countdownInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private navCtrl: NavController, private gameStateService: GameStateService) { }
+  /** Shown when the user tries to open matchmaking while another tab is active. */
+  duplicateTabMessage = false;
+
+  constructor(private navCtrl: NavController, private gameStateService: GameStateService, private tabLock: TabLockService) { }
   ngOnInit() { }
 
   ngOnDestroy(): void {
@@ -52,7 +56,15 @@ export class HomePage implements OnInit, OnDestroy {
 
   // ── Matchmaking ────────────────────────────────────────────────────────────
 
-  openMatchmaking(): void {
+  async openMatchmaking(): Promise<void> {
+    // Prevent duplicate matchmaking from multiple tabs
+    if (await this.tabLock.isOtherTabActive()) {
+      this.duplicateTabMessage = true;
+      setTimeout(() => this.duplicateTabMessage = false, 4000);
+      return;
+    }
+
+    this.tabLock.claimSession();
     this.showMatchmaking = true;
     this.matchmakingConnected = 0;
     this.matchmakingSecondsLeft = 30;
@@ -85,6 +97,7 @@ export class HomePage implements OnInit, OnDestroy {
   cancelMatchmaking(): void {
     this.cleanupMatchmaking();
     this.gameStateService.disconnect();
+    this.tabLock.releaseSession();
     this.showMatchmaking = false;
   }
 
