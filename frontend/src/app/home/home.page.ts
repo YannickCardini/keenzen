@@ -8,6 +8,7 @@ import { GameStateService } from '../game/services/game-state.service';
 import { TabLockService } from '../game/services/tab-lock.service';
 import type { MarbleColor } from '@keezen/shared';
 import { environment } from 'src/environments/environment';
+import { generateGuestName } from '../shared/guest-name';
 
 @Component({
   selector: 'app-home',
@@ -27,12 +28,10 @@ export class HomePage implements OnInit, OnDestroy {
 
   // ── Matchmaking state ──────────────────────────────────────────────────────
   matchmakingConnected = 0;
-  matchmakingSecondsLeft = 30;
   myMatchmakingColor: MarbleColor | null = null;
 
   private matchmakingSub: Subscription | null = null;
   private gameStartSub: Subscription | null = null;
-  private countdownInterval: ReturnType<typeof setInterval> | null = null;
 
   /** Shown when the user tries to open matchmaking while another tab is active. */
   duplicateTabMessage = false;
@@ -67,11 +66,10 @@ export class HomePage implements OnInit, OnDestroy {
     this.tabLock.claimSession();
     this.showMatchmaking = true;
     this.matchmakingConnected = 0;
-    this.matchmakingSecondsLeft = 30;
     this.myMatchmakingColor = null;
 
     this.gameStateService.connect(environment.wsUrl, () => {
-      this.gameStateService.sendJoinMatchmaking('Player');
+      this.gameStateService.sendJoinMatchmaking(generateGuestName());
     });
 
     this.matchmakingSub = this.gameStateService.matchmakingStatus$.subscribe(status => {
@@ -87,11 +85,6 @@ export class HomePage implements OnInit, OnDestroy {
 
     });
 
-    this.countdownInterval = setInterval(() => {
-      if (this.matchmakingSecondsLeft > 0) {
-        this.matchmakingSecondsLeft--;
-      }
-    }, 1000);
   }
 
   cancelMatchmaking(): void {
@@ -106,9 +99,5 @@ export class HomePage implements OnInit, OnDestroy {
     this.gameStartSub?.unsubscribe();
     this.matchmakingSub = null;
     this.gameStartSub = null;
-    if (this.countdownInterval) {
-      clearInterval(this.countdownInterval);
-      this.countdownInterval = null;
-    }
   }
 }

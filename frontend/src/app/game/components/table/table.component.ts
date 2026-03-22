@@ -408,6 +408,7 @@ enum TURN_PHASE {
       }
     }
 
+    this.clearTimer();
     this.selectedCardIndex.set(null);
     this.turnPhase.set('Wait for your turn');
   }
