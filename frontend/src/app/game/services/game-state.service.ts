@@ -30,6 +30,7 @@ import {
 export class GameStateService {
 
   boardContainerSize = signal(0);
+  timeLeft = signal(0);
 
   // ── État serveur ──────────────────────────────────────────────────────────
   data = signal<GameStateMessage | null>(null);

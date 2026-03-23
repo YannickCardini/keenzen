@@ -635,6 +635,11 @@ export class BoardComponent implements OnInit, OnDestroy {
     return this.displayedGameData()?.gameState.currentTurn === color;
   }
 
+  getDisplayName(player: Player | undefined): string {
+    if (!player) return 'En attente';
+    return player.name.length > 8 ? player.name.slice(0, 8) : player.name;
+  }
+
   getArrivalNumber(index: number): number | null {
     for (const positions of Object.values(this.arrivals)) {
       const pos = positions.indexOf(index);

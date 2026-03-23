@@ -523,14 +523,14 @@ $colors: (
     border-radius: calc(var(--square-size) * 0.5);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
     padding: 0 calc(var(--square-size) * 0.2);
-    gap: calc(var(--square-size) * 0.2);
-    transition: all 0.3s ease;
+    gap: calc(var(--square-size) * 0.15);
+    transition: box-shadow 0.3s ease, filter 0.3s ease, opacity 0.3s ease;
     position: relative;
     overflow: hidden;
 
     .avatar-ring {
-        width: calc(var(--square-size) * 0.6);
-        height: calc(var(--square-size) * 0.6);
+        width: calc(var(--square-size) * 0.5);
+        height: calc(var(--square-size) * 0.5);
         border-radius: 50%;
         background: rgba(0, 0, 0, 0.05);
         display: flex;
@@ -548,83 +548,85 @@ $colors: (
 
     .player-info {
         display: flex;
-        justify-content: space-between;
+        align-items: center;
         overflow: hidden;
-        white-space: nowrap;
         width: 100%;
-        padding: 0 7% 0 3%;
+        gap: calc(var(--square-size) * 0.15);
 
         .player-name {
-            font-size: calc(var(--square-size) * 0.4);
+            font-size: calc(var(--square-size) * 0.35);
             font-weight: bold;
             color: var(--ion-color-dark, #1f2937);
-            text-overflow: ellipsis;
             overflow: hidden;
+            white-space: nowrap;
+            flex: 1;
+            min-width: 0;
         }
-
-        // ── 5 slots de cartes ─────────────────────────────────────────────
-
 
         .cards-indicator {
             display: flex;
-            gap: 4px;
+            gap: 3px;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .card-slot {
-            width: 6px;
-            /* Taille fixe ou calc() */
-            height: 6px;
+            width: 5px;
+            height: 5px;
             border-radius: 50%;
-            background-color: rgba(0, 0, 0, 0.1);
-            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+            background-color: rgba(0, 0, 0, 0.12);
             transition: all 0.4s ease;
 
             &.card-slot--filled {
                 transform: scale(1.3);
-                background-color: currentColor;
-                /* Prend la couleur du joueur */
-                box-shadow: 0 0 6px currentColor;
-                /* Effet néon */
+                background-color: var(--player-color, currentColor);
+                box-shadow: 0 0 5px var(--player-color, currentColor);
             }
         }
 
-        /* Dans la boucle @each */
-        @each $name, $hex in $colors {
-            &.theme-#{$name} {
-                .card-slot--filled {
-                    color: $hex;
-                    /* Sert pour le background et le shadow via currentColor */
-                }
+        .turn-timer {
+            font-size: calc(var(--square-size) * 0.32);
+            font-weight: 700;
+            color: var(--player-color, currentColor);
+            flex-shrink: 0;
+            line-height: 1;
+        }
+
+        .disconnect-icon {
+            color: rgba(210, 70, 70, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            pointer-events: none;
+            width: calc(var(--square-size) * 0.38);
+
+            svg {
+                width: 100%;
+                height: 100%;
+                min-width: 12px;
+                min-height: 12px;
             }
         }
     }
 
     @each $name, $hex in $colors {
         &.theme-#{$name} {
+            --player-color: #{$hex};
+            --player-glow: #{rgba($hex, 0.55)};
+
             .avatar-color {
                 background-color: $hex;
             }
 
-            // active-turn : on évite border (modifie le box model) et transform scale
-            // (distord les enfants). On utilise box-shadow multicouche pour l'anneau
-            // coloré + la lueur, et filter brightness pour le relief visuel.
             &.active-turn {
-                box-shadow:
-                    0 0 0 2px $hex,
-                    0 0 14px rgba($hex, 0.45),
-                    0 4px 8px rgba(0, 0, 0, 0.12);
-                filter: brightness(1.04);
+                animation: activeTurnPulse 1.5s ease-in-out infinite;
             }
 
             &.no-cards {
                 opacity: 0.55;
                 filter: grayscale(60%) brightness(0.9);
                 transition: opacity 0.4s ease, filter 0.4s ease;
-            }
-
-            .card-slot--filled {
-                color: $hex;
             }
         }
     }
@@ -636,25 +638,22 @@ $colors: (
         outline-offset: 2px;
         animation: disconnectedPulse 2s ease-in-out infinite;
     }
+}
 
-    .disconnected-badge {
-        position: absolute;
-        top: 50%;
-        right: calc(var(--square-size) * 0.18);
-        transform: translateY(-50%);
-        color: rgba(210, 70, 70, 0.85);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        pointer-events: none;
-
-        svg {
-            width: calc(var(--square-size) * 0.38);
-            height: calc(var(--square-size) * 0.38);
-            min-width: 12px;
-            min-height: 12px;
-        }
+@keyframes activeTurnPulse {
+    0%, 100% {
+        box-shadow:
+            0 0 0 2px var(--player-color),
+            0 0 10px var(--player-glow),
+            0 4px 8px rgba(0, 0, 0, 0.12);
+        filter: brightness(1.02);
+    }
+    50% {
+        box-shadow:
+            0 0 0 2px var(--player-color),
+            0 0 24px var(--player-glow),
+            0 4px 8px rgba(0, 0, 0, 0.12);
+        filter: brightness(1.07);
     }
 }
 

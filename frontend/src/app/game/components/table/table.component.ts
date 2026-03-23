@@ -38,7 +38,7 @@ enum TURN_PHASE {
 
   /** Circonférence du cercle SVG (rayon = 27.5) */
   readonly timerCircumference = 2 * Math.PI * 27.5; // ≈ 172.79
-  timeLeft = signal(0);
+  timeLeft = this.gameStateService.timeLeft;
   timerInterval?: any; // Type 'any' pour setInterval --- IGNORE ---
 
   // ── Signaux UI ─────────────────────────────────────────────────
