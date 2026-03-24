@@ -240,6 +240,13 @@
     width: 100%;
     z-index: 10;
     padding: 0 1rem 1.5rem;
+    transition: opacity 0.25s ease, filter 0.25s ease;
+
+    &.turn-inactive {
+        opacity: 0.45;
+        filter: grayscale(0.5);
+        pointer-events: none;
+    }
 }
 
 .cards-fan {
@@ -343,7 +350,7 @@
     background: var(--surface);
     backdrop-filter: blur(24px) saturate(1.8);
     border-top: 3px solid var(--border);
-    transition: border-top-color 0.3s ease, box-shadow 0.3s ease;
+    transition: border-top-color 0.3s ease, box-shadow 0.3s ease, opacity 0.25s ease, filter 0.25s ease;
     padding: 1rem 1.25rem;
     padding-bottom: calc(1rem + env(safe-area-inset-bottom));
     z-index: 20;
@@ -352,6 +359,12 @@
     left: 0;
     right: 0;
     box-sizing: border-box;
+
+    &.turn-inactive {
+        opacity: 0.45;
+        filter: grayscale(0.5);
+        pointer-events: none;
+    }
 }
 
 .dashboard-grid {
@@ -590,6 +603,13 @@
     &.seven-split-bar--split-active {
         border-color: rgba(192, 132, 252, 0.3);
         box-shadow: 0 0 20px rgba(192, 132, 252, 0.1);
+    }
+
+    &.turn-inactive {
+        opacity: 0.45;
+        filter: grayscale(0.5);
+        pointer-events: none;
+        transition: opacity 0.25s ease, filter 0.25s ease;
     }
 }
 
