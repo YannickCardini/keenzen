@@ -10,8 +10,8 @@ import {
   OnDestroy
 } from '@angular/core';
 import { TockCardComponent } from 'src/app/shared/tock-card.component';
-import type { Card, MarbleColor } from '@keezen/shared';
-import { getValidSevenStepsForMarble, getPositionAfterMove, getLegalSplit7Action, type LegalMoveContext } from '@keezen/shared';
+import type { Card, MarbleColor } from '@mercury/shared';
+import { getValidSevenStepsForMarble, getPositionAfterMove, getLegalSplit7Action, type LegalMoveContext } from '@mercury/shared';
 import { Subscription } from 'rxjs';
 import { Router } from '@angular/router';
 import { SoundService } from '../../services/sound.service';

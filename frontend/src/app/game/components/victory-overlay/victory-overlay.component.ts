@@ -1,5 +1,5 @@
 import { Component, input } from '@angular/core';
-import { MarbleColor } from '@keezen/shared';
+import { MarbleColor } from '@mercury/shared';
 
 interface ConfettiPiece {
   id: number;

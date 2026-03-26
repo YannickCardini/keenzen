@@ -3,7 +3,7 @@ import { Game } from '../game/game.js';
 import { SingleWsMessenger, MultiWsMessenger } from '../game/game-messenger.js';
 import { MatchmakingManager } from './matchmaking-manager.js';
 import { GameRegistry } from './game-registry.js';
-import type { GameConfig, MarbleColor } from '@keezen/shared';
+import type { GameConfig, MarbleColor } from '@mercury/shared';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SessionManager — gestion des rooms multi-device

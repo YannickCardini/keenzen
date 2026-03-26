@@ -7,12 +7,18 @@
         <span *ngFor="let l of titleLetters; let i = index" class="nav-letter" [style.--i]="i"> </span>
       </div>
       <button class="nav-login-btn" (click)="openLogin()">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="8" r="5" />
-          <path d="M3 21v-1a9 9 0 0 1 18 0v1" />
-        </svg>
-        <span>Connexion</span>
+        <ng-container *ngIf="auth.user$ | async as user; else guestIcon">
+          <img class="nav-avatar" [src]="user.picture" [alt]="user.name" referrerpolicy="no-referrer">
+          <span>{{ user.name.split(' ')[0] }}</span>
+        </ng-container>
+        <ng-template #guestIcon>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="5" />
+            <path d="M3 21v-1a9 9 0 0 1 18 0v1" />
+          </svg>
+          <span>Connexion</span>
+        </ng-template>
       </button>
     </nav>
 
@@ -116,34 +122,37 @@
           </h2>
         </div>
 
-        <form class="modal-form" (ngSubmit)="$event.preventDefault()">
-          <div class="form-group" *ngIf="loginMode === 'signup'">
-            <label class="form-label">Pseudo</label>
-            <input type="text" class="form-input" placeholder="Votre pseudo">
+        <!-- Utilisateur connecté -->
+        <div *ngIf="auth.user$ | async as user" class="auth-user-info">
+          <img class="auth-avatar" [src]="user.picture" [alt]="user.name" referrerpolicy="no-referrer">
+          <div class="auth-user-details">
+            <p class="auth-user-name">{{ user.name }}</p>
+            <p class="auth-user-stats">{{ user.points }} pts &bull; Rang #{{ user.ranking }}</p>
           </div>
-          <div class="form-group">
-            <label class="form-label">Email</label>
-            <input type="email" class="form-input" placeholder="votre&#64;email.com">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Mot de passe</label>
-            <input type="password" class="form-input" placeholder="••••••••">
-          </div>
-          <button type="submit" class="form-submit">
-            {{ loginMode === 'login' ? 'Se connecter' : "S'inscrire" }}
-          </button>
-        </form>
+          <button class="btn-logout" (click)="logout()">Déconnexion</button>
+        </div>
 
-        <div class="modal-footer">
-          <button class="btn-switch" (click)="switchMode(loginMode === 'login' ? 'signup' : 'login')">
-            <span *ngIf="loginMode === 'login'">Pas encore de compte ?&nbsp;<b>S'inscrire</b></span>
-            <span *ngIf="loginMode === 'signup'">Déjà un compte ?&nbsp;<b>Se connecter</b></span>
+        <!-- Formulaire si non connecté -->
+        <ng-container *ngIf="!(auth.user$ | async)">
+          <div class="login-error-banner" *ngIf="loginError">
+            Connexion Google échouée. Réessaie.
+          </div>
+
+          <button class="btn-google" (click)="loginWithGoogle()">
+            <svg width="18" height="18" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            <span>Continuer avec Google</span>
           </button>
+
           <div class="or-divider"><span>ou</span></div>
           <button class="btn-guest" (click)="closeLogin()">
             Continuer sans compte&nbsp;→
           </button>
-        </div>
+        </ng-container>
 
       </div>
     </div>
@@ -174,11 +183,11 @@
           </div>
           <div class="info-row">
             <span class="info-key">Contact</span>
-            <a class="info-link" href="#">contact&#64;keenzen.com</a>
+            <a class="info-link" href="#">contact&#64;mercury.com</a>
           </div>
           <div class="info-row">
             <span class="info-key">Développeur</span>
-            <span class="info-val">Keenzen Team</span>
+            <span class="info-val">Mercury Team</span>
           </div>
         </div>
 
@@ -235,27 +244,23 @@
 
         <!-- Player slots -->
         <div class="mq-slots">
-          <div class="mq-slot mq-slot-red"
-               [class.mq-filled]="matchmakingConnected >= 1"
-               [class.mq-mine]="myMatchmakingColor === 'red'">
+          <div class="mq-slot mq-slot-red" [class.mq-filled]="matchmakingConnected >= 1"
+            [class.mq-mine]="myMatchmakingColor === 'red'">
             <span class="mm mm-red" *ngIf="matchmakingConnected >= 1"></span>
             <span class="mq-empty" *ngIf="matchmakingConnected < 1"></span>
           </div>
-          <div class="mq-slot mq-slot-green"
-               [class.mq-filled]="matchmakingConnected >= 2"
-               [class.mq-mine]="myMatchmakingColor === 'green'">
+          <div class="mq-slot mq-slot-green" [class.mq-filled]="matchmakingConnected >= 2"
+            [class.mq-mine]="myMatchmakingColor === 'green'">
             <span class="mm mm-green" *ngIf="matchmakingConnected >= 2"></span>
             <span class="mq-empty" *ngIf="matchmakingConnected < 2"></span>
           </div>
-          <div class="mq-slot mq-slot-blue"
-               [class.mq-filled]="matchmakingConnected >= 3"
-               [class.mq-mine]="myMatchmakingColor === 'blue'">
+          <div class="mq-slot mq-slot-blue" [class.mq-filled]="matchmakingConnected >= 3"
+            [class.mq-mine]="myMatchmakingColor === 'blue'">
             <span class="mm mm-blue" *ngIf="matchmakingConnected >= 3"></span>
             <span class="mq-empty" *ngIf="matchmakingConnected < 3"></span>
           </div>
-          <div class="mq-slot mq-slot-orange"
-               [class.mq-filled]="matchmakingConnected >= 4"
-               [class.mq-mine]="myMatchmakingColor === 'orange'">
+          <div class="mq-slot mq-slot-orange" [class.mq-filled]="matchmakingConnected >= 4"
+            [class.mq-mine]="myMatchmakingColor === 'orange'">
             <span class="mm mm-orange" *ngIf="matchmakingConnected >= 4"></span>
             <span class="mq-empty" *ngIf="matchmakingConnected < 4"></span>
           </div>
@@ -292,7 +297,7 @@
             <span class="mm mm-orange"></span>
           </div>
           <h2 class="modal-title">Game Rules</h2>
-          <p class="rules-subtitle">Keezen — Old Dutch Board Game</p>
+          <p class="rules-subtitle">Mercury — Old Dutch Board Game</p>
         </div>
 
         <div class="rules-body">
@@ -303,7 +308,8 @@
               <span class="rules-icon">🎯</span>
               <h3 class="rules-section-title">Goal of the Game</h3>
             </div>
-            <p class="rules-text">Move all four of your marbles from your starting boxes, around the board, and into your <strong>home lane</strong>. First player to get all 4 marbles home wins.</p>
+            <p class="rules-text">Move all four of your marbles from your starting boxes, around the board, and into
+              your <strong>home lane</strong>. First player to get all 4 marbles home wins.</p>
           </div>
 
           <!-- Players -->
@@ -318,7 +324,8 @@
               <span class="mm mm-blue"></span>
               <span class="mm mm-orange"></span>
             </div>
-            <p class="rules-note">4 players, every man for himself. First to get all 4 marbles into their home lane wins.</p>
+            <p class="rules-note">4 players, every man for himself. First to get all 4 marbles into their home lane
+              wins.</p>
           </div>
 
           <!-- How to Play -->
@@ -328,11 +335,15 @@
               <h3 class="rules-section-title">How to Play</h3>
             </div>
             <ul class="rules-list">
-              <li>Each player gets <strong>13 cards</strong> dealt over 3 rounds (5 · 4 · 4). Play proceeds clockwise.</li>
-              <li>On your turn, play <strong>one card</strong> and perform its action. You have <strong>30 seconds</strong> — time runs out, a move is played automatically.</li>
-              <li><strong>Entering:</strong> Play an <strong>A</strong> or <strong>K</strong> to place a marble on your start position.</li>
+              <li>Each player gets <strong>13 cards</strong> dealt over 3 rounds (5 · 4 · 4). Play proceeds clockwise.
+              </li>
+              <li>On your turn, play <strong>one card</strong> and perform its action. You have <strong>30
+                  seconds</strong> — time runs out, a move is played automatically.</li>
+              <li><strong>Entering:</strong> Play an <strong>A</strong> or <strong>K</strong> to place a marble on your
+                start position.</li>
               <li><strong>Capturing:</strong> Landing exactly on another marble sends it back to its starting box.</li>
-              <li><strong>Home lane:</strong> When passing your own start position, you enter the home lane. You must land <em>exactly</em> on a free slot — no overshooting.</li>
+              <li><strong>Home lane:</strong> When passing your own start position, you enter the home lane. You must
+                land <em>exactly</em> on a free slot — no overshooting.</li>
               <li><strong>No legal move?</strong> Discard your entire hand and wait for the next deal.</li>
             </ul>
           </div>
@@ -384,15 +395,18 @@
             <div class="rules-alerts">
               <div class="rules-alert">
                 <span class="alert-badge">🛡️</span>
-                <div><strong>Safe zones:</strong> A marble on its own start position is invincible — it blocks passage and cannot be captured or swapped. Home lane marbles are also safe.</div>
+                <div><strong>Safe zones:</strong> A marble on its own start position is invincible — it blocks passage
+                  and cannot be captured or swapped. Home lane marbles are also safe.</div>
               </div>
               <div class="rules-alert">
                 <span class="alert-badge">🏠</span>
-                <div><strong>Home lane order:</strong> Marbles fill the home lane from the back slot forward. You cannot jump over your own marbles inside the lane.</div>
+                <div><strong>Home lane order:</strong> Marbles fill the home lane from the back slot forward. You cannot
+                  jump over your own marbles inside the lane.</div>
               </div>
               <div class="rules-alert">
                 <span class="alert-badge">🔄</span>
-                <div><strong>Jack restriction:</strong> Cannot swap with a marble that is on its own start position or already in a home lane.</div>
+                <div><strong>Jack restriction:</strong> Cannot swap with a marble that is on its own start position or
+                  already in a home lane.</div>
               </div>
             </div>
           </div>

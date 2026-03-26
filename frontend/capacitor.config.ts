@@ -1,9 +1,9 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.android.keenzen',
-  appName: 'Keezen',
-  webDir: 'www'
+  appId: 'app.android.mercury',
+  appName: 'Mercury',
+  webDir: 'www',
 };
 
 export default config;

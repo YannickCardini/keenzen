@@ -26,7 +26,7 @@ jobs:
           node-version: '20.x'
 
       # Le package partagé doit être buildé avant le frontend
-      # car le frontend en dépend via @keezen/shared
+      # car le frontend en dépend via @mercury/shared
       - name: Build shared package
         run: |
           cd packages/shared

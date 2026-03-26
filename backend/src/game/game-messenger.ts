@@ -1,4 +1,4 @@
-import type { ClientMessage, MarbleColor } from '@keezen/shared';
+import type { ClientMessage, MarbleColor } from '@mercury/shared';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GameMessenger — abstraction de la couche WebSocket

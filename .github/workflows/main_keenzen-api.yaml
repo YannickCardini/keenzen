@@ -33,7 +33,7 @@ jobs:
 
       # 3. On prépare un dossier de déploiement propre :
       #    - le dist/ du backend
-      #    - le dist/ du shared (résolu via node_modules/@keezen/shared)
+      #    - le dist/ du shared (résolu via node_modules/@mercury/shared)
       #    - le package.json du backend (Azure en a besoin pour npm install en prod)
       - name: Prepare deployment package
         run: |
@@ -42,9 +42,9 @@ jobs:
           cp    backend/package.json deploy/
           cp    backend/package-lock.json deploy/ 2>/dev/null || true
           # Copie le shared buildé dans node_modules pour qu'Azure le trouve
-          mkdir -p deploy/node_modules/@keezen
-          cp -r packages/shared/dist deploy/node_modules/@keezen/shared
-          cp    packages/shared/package.json deploy/node_modules/@keezen/shared/
+          mkdir -p deploy/node_modules/@mercury
+          cp -r packages/shared/dist deploy/node_modules/@mercury/shared
+          cp    packages/shared/package.json deploy/node_modules/@mercury/shared/
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4

@@ -1,6 +1,6 @@
-# keenzen
+# mercury
 
-Application pour jouer à Keenzen avec ma famille.
+Application pour jouer à mercury avec ma famille.
 
 ## 🚀 Lancer l'application en local
 
@@ -79,7 +79,7 @@ Le projet utilise GitHub Actions pour le déploiement automatique.
 
 1. **Configuration requise** :
    - Un Azure Container Registry (ici : `basicregistrecontainer`)
-   - Un cluster AKS (ici : `KeezenCluster`)
+   - Un cluster AKS (ici : `MercuryCluster`)
    - Un resource group Azure (ici : `RG-Web`)
 
 2. **Variables secrets à configurer** (dans les paramètres GitHub) :
@@ -93,33 +93,33 @@ Le projet utilise GitHub Actions pour le déploiement automatique.
 4. **Déploiement manuel** :
    ```bash
    # Build de l'image Docker
-   docker build -t keezen:latest .
+   docker build -t mercury:latest .
 
    # Connexion au registry
    docker login basicregistrecontainer.azurecr.io
 
    # Pousser l'image
-   docker push basicregistrecontainer.azurecr.io/keezen:latest
+   docker push basicregistrecontainer.azurecr.io/mercury:latest
 
    # Configurer kubectl
-   az aks get-credentials --resource-group RG-Web --name KeezenCluster
+   az aks get-credentials --resource-group RG-Web --name MercuryCluster
 
    # Déployer
-   kubectl set image deployment/keezen-deployment keezen-game=basicregistrecontainer.azurecr.io/keezen:latest
+   kubectl set image deployment/mercury-deployment mercury-game=basicregistrecontainer.azurecr.io/mercury:latest
    ```
 
 ---
 
 ## 📋 Règles du jeu
 
-Les règles du jeu Keenzen sont disponibles dans le fichier [rules.pdf](./rules.pdf).
+Les règles du jeu mercury sont disponibles dans le fichier [rules.pdf](./rules.pdf).
 
 ---
 
 ## 🛠️ Structure du projet
 
 ```
-keenzen/
+mercury/
 ├── app/                    # Application Ionic/Angular
 │   ├── src/               # Code source
 │   ├── android/           # Projet Android (Capacitor)

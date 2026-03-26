@@ -1,112 +1,224 @@
-## BUG: /home page layout clips the footer at default zoom
+================================================================================
+ MERCURY – TODO LIST
+================================================================================
 
-**Problem:**
-The `/home` route cuts off the footer (the version/settings button) at 100% browser zoom.
-The user has to zoom out to 90% to see the full page. The `/game` route is not affected.
+--------------------------------------------------------------------------------
+ 1. Replace the login button with a dedicated Google Sign-In button
+--------------------------------------------------------------------------------
 
-**Root cause:**
-In `frontend/src/app/home/home.page.scss`, `.home-content` sets `overflow: hidden` and
-`.home-wrap` uses `position: absolute; inset: 0; overflow: hidden`. The three flex children
-(`.home-nav`, `.home-hero`, `.home-footer`) cannot all fit vertically on short/standard
-viewports, so the footer is clipped.
+The only authentication option is Google Sign-In. There should be no generic
+"Connect" or "Login" button. Replace it with a styled Google Sign-In button.
 
-**Steps to fix:**
-1. Open `frontend/src/app/home/home.page.scss`.
-2. Make `.home-hero` shrinkable by adding `flex-shrink: 1` and `overflow: hidden` (or
-   `overflow-y: auto`) on it, while ensuring `.home-nav` and `.home-footer` have
-   `flex-shrink: 0` so they are never clipped.
-3. Verify the fix: at 100% zoom, both the nav bar at the top and the settings/version
-   button in the footer must be fully visible without scrolling.
-4. Check that the orbit decoration and action buttons inside `.home-hero` still render
-   correctly and are not cropped after the fix.
+Files:
+  - frontend/src/app/home/home.page.html  (button markup)
+  - frontend/src/app/home/home.page.ts    (button handler)
+  - frontend/src/app/services/auth.service.ts  (signInWithGoogle() method)
 
----
+Steps:
+  - In home.page.html, remove the current connection button.
+  - Add a Google Sign-In button in its place (follow Google branding guidelines:
+    correct logo, label "Sign in with Google", correct colors).
+  - The button must call the existing signInWithGoogle() method from AuthService.
+  - No other login option should be visible.
 
-## FEATURE: Show a reconnection UI when the server becomes unreachable during a game
+--------------------------------------------------------------------------------
+ 2. Display error messages to the user on auth or DB failures
+--------------------------------------------------------------------------------
 
-**Problem:**
-If the backend WebSocket server becomes unreachable while a game is in progress, there is
-currently no user-facing feedback. The `isConnected` signal in `GameStateService` flips to
-`false`, but no overlay or message is shown on the `/game` route.
+When Google Sign-In fails or the backend cannot connect to Cosmos DB, the user
+must see an explicit error message instead of silent failure.
 
-Additionally, in `frontend/src/app/game/services/game-state.service.ts` at line 364–371,
-`ws.onclose` only emits `connectionError$` when `data()` is null (i.e. before a game
-started). A mid-game disconnect does not trigger any observable.
+Files:
+  - frontend/src/app/services/auth.service.ts
+  - frontend/src/app/home/home.page.ts / home.page.html
+  - backend/src/auth/auth-router.ts
+  - backend/src/db.ts
 
-**Steps to fix:**
+Steps:
+  - In auth.service.ts: catch errors thrown during Google Sign-In and propagate
+    them (throw, return an error state, or emit on an error observable/signal).
+  - In home.page.ts: catch these errors and display a user-visible message
+    (e.g., Ionic <ion-toast> or <ion-alert>) with a human-readable description:
+      - "Could not sign in with Google. Please try again."
+      - "Server error. Please try again later." (for backend failures)
+  - In auth-router.ts: ensure the POST /api/auth/google endpoint returns a
+    proper HTTP 500 with a JSON error body if Cosmos DB is unreachable.
+  - In db.ts: ensure connection errors are thrown (not swallowed) so that the
+    router can catch them and return the appropriate HTTP response.
 
-1. **Expose a mid-game disconnect event in `GameStateService`**
-   - Add a new RxJS `Subject` (e.g. `midGameDisconnect$: Subject<void>`) to
-     `GameStateService`.
-   - In `ws.onclose` (line 364), change the `else if (this.data() === null)` branch to
-     also emit `midGameDisconnect$` when `data()` is NOT null (i.e. a game is active).
+--------------------------------------------------------------------------------
+ 3. Style the Google profile picture to fit the app design
+--------------------------------------------------------------------------------
 
-2. **Add a reconnection overlay to the game page**
-   - In `frontend/src/app/game/game.page.html`, add a full-screen overlay (or modal) that
-     is visible when the connection is lost mid-game. Example condition:
-     `!gameStateService.isConnected() && gameStateService.data() !== null`.
-   - The overlay must display an English message such as:
-     "Connection lost — attempting to reconnect…"
-   - The overlay must block interaction with the board while visible.
+The Google profile picture URL is already fetched and stored in user.picture.
+The photo must be displayed with correct styling so it integrates cleanly into
+the existing app design.
 
-3. **Implement auto-reconnect logic in `GamePage`**
-   - Subscribe to `midGameDisconnect$` in `GamePage` (or inside `GameStateService`).
-   - On disconnect, attempt to reconnect using the stored credentials:
-     `localStorage.getItem('guest_player_id')` and `localStorage.getItem('active_game_id')`.
-   - Call `gameStateService.connect(wsUrl)` and, on `ws.onopen`, send a `joinGame` message
-     via `gameStateService.sendJoinGame(guestPlayerId, activeGameId)`.
-   - The backend already supports this flow: it will respond with a `gameState` message
-     that restores the session.
+Files:
+  - frontend/src/app/home/home.page.html  (any avatar/photo display area)
+  - frontend/src/app/services/auth.service.ts  (provides user.picture)
+  - Any shared avatar component if it exists
 
-4. **Handle reconnection failure**
-   - If reconnect attempts fail after a reasonable timeout (or if the server responds that
-     the game no longer exists), navigate the user back to `/home` and display a message
-     such as: "The game was aborted because the server could not be reached."
-   - Use an Angular Router `navigate(['/home'])` call for this redirect.
+Steps:
+  - Identify every location in the UI where user.picture is (or should be)
+    rendered.
+  - Apply CSS so the image is:
+      - Circular (border-radius: 50% or equivalent)
+      - Fixed size consistent with the surrounding design
+      - Matching the border/shadow style used elsewhere in the app
+  - Add an onerror fallback on the <img> tag: if the Google image URL fails to
+    load, fall back to the default avatar ring or a placeholder icon.
+  - Verify the result looks correct on both mobile (Capacitor Android) and web.
 
-5. **Hide the overlay on successful reconnect**
-   - When a `gameState` message is received, `isConnected` is set back to `true` and
-     `data()` is populated — the overlay condition becomes false automatically.
-   - Ensure the board re-renders correctly after reconnection (call
-     `boardRef?.calculateSquareSize()` if needed).
+--------------------------------------------------------------------------------
+ 4. Show the logged-in user's photo and name in the player info area
+--------------------------------------------------------------------------------
 
----
+When a user is authenticated, replace their avatar ring and guest name with
+their Google profile photo and a display name derived from their Google account.
 
-## BUG: Active sounds are not stopped when the player resigns
+Files:
+  - frontend/src/app/game/components/table/table.component.ts
+  - frontend/src/app/services/auth.service.ts
 
-**Problem:**
-When the local human player resigns (abandons the game), any currently playing sounds
-(e.g. the `playNewTurn` bell, which lasts ~1.2s, or `playCountdownTick` ticks) continue
-playing until they naturally decay. There is no mechanism to silence the `AudioContext`.
+Display name fallback logic (apply in order):
+  1. Use givenName (Google first name) if its length is <= 10 characters.
+  2. Otherwise, use familyName (Google last name) if its length is <= 10 chars.
+  3. Otherwise, truncate givenName to 8 characters and append "…".
+  4. As a last resort, use the full user.name from Google (already stored in DB).
 
-**Relevant files:**
-- `frontend/src/app/game/services/sound.service.ts` — all sound synthesis and playback
-- `frontend/src/app/game/services/game-state.service.ts` — `sendAbandonGame()` at line 420
+Steps:
+  - In table.component.ts, inject AuthService and check if the current seat
+    belongs to the authenticated user.
+  - If yes:
+      - Display user.picture as the avatar image (replacing the avatar ring
+        SVG/icon). Apply the same styling as described in task 3.
+      - Compute and display the display name using the fallback logic above.
+  - If no (guest or other player):
+      - Keep the current behavior: show the avatar ring and guest name.
 
-**Steps to fix:**
+--------------------------------------------------------------------------------
+ 5. Update player points in the database after each game outcome
+--------------------------------------------------------------------------------
 
-1. **Add a `stopAll()` method to `SoundService`**
-   - The cleanest approach is to suspend (or close and nullify) the `AudioContext`:
-     ```ts
-     stopAll(): void {
-       this.ctx?.suspend();
-     }
-     ```
-   - `suspend()` immediately stops all scheduled audio and is reversible via `resume()`
-     (which `getCtx()` already calls). This ensures future sounds after a new game still
-     work correctly.
-   - An alternative (more aggressive) is `this.ctx?.close()` followed by
-     `this.ctx = null`, which also works since `getCtx()` recreates the context on demand.
+When a connected (non-guest) player's game ends, update their `points` field in
+Cosmos DB. Apply the following point deltas:
+  - Win:    +3
+  - Loss:   -1
+  - Abandon (disconnect while game is in progress): -2
 
-2. **Call `stopAll()` when the player resigns**
-   - In `GamePage` (`frontend/src/app/game/game.page.ts`), find the location where resign
-     is triggered (the UI button that calls `gameStateService.sendAbandonGame()`).
-   - Call `soundService.stopAll()` immediately before or after `sendAbandonGame()`.
-   - Alternatively, call `stopAll()` inside `sendAbandonGame()` in `GameStateService` if
-     `SoundService` is injected there (currently it is not; prefer calling it from
-     `GamePage` where `SoundService` is already injected).
+Files:
+  - backend/src/db.ts
+  - backend/src/game/game.ts
+  - backend/src/session/session-manager.ts
+  - backend/src/auth/auth-router.ts  (if a dedicated endpoint is needed)
 
-3. **Verify the fix**
-   - Start a game, wait for a new-turn bell to begin playing, then resign immediately.
-   - Confirm the sound stops at the moment of resignation.
-   - Start another game immediately after and confirm sounds play normally.
+Steps:
+  1. In db.ts, add a function:
+       updateUserPoints(userId: string, delta: number): Promise<void>
+     that increments the `points` field of the user document with the given
+     userId (use Cosmos DB's patch or replace operation with $inc or equivalent).
+
+  2. After updating points, call recomputeRankings() (see task 7) to keep the
+     ranking field current.
+
+  3. In game.ts, when the game ends (first player gets all marbles to arrival):
+       - Identify which players are authenticated (have a Google userId, not a
+         guest ID).
+       - Call updateUserPoints(userId, +3) for the winner.
+       - Call updateUserPoints(userId, -1) for each losing authenticated player.
+
+  4. In session-manager.ts (or game.ts), detect when a WebSocket closes while
+     the game is still in progress (player disconnects without game ending):
+       - If the disconnected player is authenticated, call
+         updateUserPoints(userId, -2).
+       - Do not apply this penalty if the game had already ended naturally.
+
+  5. Guest players (no Google account) are unaffected — do not attempt any DB
+     update for them.
+
+--------------------------------------------------------------------------------
+ 6. Show a player profile panel on avatar click (or hover on web)
+--------------------------------------------------------------------------------
+
+Clicking on a player's avatar ring (or hovering on desktop) must open a panel
+displaying that player's full profile information.
+
+Panel contents:
+  - Full name (user.name from Google)
+  - Profile photo (larger version of user.picture)
+  - Total points (user.points)
+  - Ranking (user.ranking — their position in the global leaderboard)
+  - Time since account creation, computed from user.createdAt
+    (e.g., "Member for 3 months", "Member for 1 year")
+
+Files:
+  - frontend/src/app/game/components/table/table.component.ts
+  - frontend/src/app/game/components/board/board.component.ts (if avatar rings
+    appear there too)
+  - frontend/src/app/services/auth.service.ts
+  - backend/src/auth/auth-router.ts  (may need GET /api/user/:id endpoint)
+
+Steps:
+  1. Add a (click) handler on each avatar ring in table.component.ts.
+     On web, also add a (mouseenter)/(mouseleave) handler for hover behavior.
+
+  2. When triggered, open an Ionic <ion-popover> or <ion-modal> showing the
+     panel contents listed above.
+
+  3. For the currently authenticated user: read data directly from AuthService
+     (no extra request needed).
+
+  4. For other players: the profile data (name, picture, points, ranking) must
+     be available. Options (choose the simplest one):
+       a. Include public profile fields (name, picture, points, ranking) in the
+          game state sent over WebSocket so the frontend already has them.
+       b. Or add a GET /api/user/:id endpoint in auth-router.ts that returns
+          { name, picture, points, ranking, createdAt } for a given userId, and
+          call it when the panel is opened.
+
+  5. Compute "time since joining" client-side from user.createdAt (ISO string).
+     Use a human-readable format (e.g., "Member for 3 months").
+
+  6. Ensure the panel:
+       - Closes when clicking outside it or pressing Escape.
+       - Works on mobile (tap to open, tap outside to close).
+       - Works on web (hover opens, mouse-leave closes; click also toggles).
+
+  7. If a player is a guest (no Google account), either disable the panel or
+     show a minimal version ("Guest player — not signed in").
+
+--------------------------------------------------------------------------------
+ 7. Implement the ranking (leaderboard ladder) system
+--------------------------------------------------------------------------------
+
+A player's ranking is their integer position in the global leaderboard, ordered
+by points descending. The player with the most points is ranked #1. Players with
+equal points share the same rank (dense ranking).
+
+The `ranking` field already exists on every user document in Cosmos DB.
+
+Files:
+  - backend/src/db.ts
+  - backend/src/auth/auth-router.ts
+
+Steps:
+  1. In db.ts, implement:
+       recomputeRankings(): Promise<void>
+     - Fetch all users from the `users` collection, ordered by `points` DESC.
+     - Assign integer ranks starting at 1 (use dense ranking: users with equal
+       points get the same rank, the next rank is the next integer, not skipped).
+     - Batch-update each user's `ranking` field in Cosmos DB.
+     - This function must be called after every updateUserPoints() call (task 5).
+
+  2. In auth-router.ts, add:
+       GET /api/leaderboard
+     Returns an array of users sorted by ranking ASC:
+       [{ name, picture, points, ranking }, ...]
+     Limit to the top N players (e.g., top 100) if the user base grows large.
+
+  3. Ensure the user's current ranking is returned as part of the auth response
+     (POST /api/auth/google response body) and/or via a GET /api/user/me
+     endpoint so the frontend can display it in the profile panel (task 6).
+
+================================================================================

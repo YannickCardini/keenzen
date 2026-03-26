@@ -1,5 +1,5 @@
-import type { Action, Card, MarbleColor } from '@keezen/shared';
-import { getHomePositions } from '@keezen/shared';
+import type { Action, Card, MarbleColor } from '@mercury/shared';
+import { getHomePositions } from '@mercury/shared';
 import type { LegalMoveContext } from '../utils/utils.js';
 import type { PlayerStrategy } from './player-strategy.js';
 

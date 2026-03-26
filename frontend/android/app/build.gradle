@@ -1,14 +1,12 @@
 apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-apply from: '../variables.gradle'
 
 android {
-    namespace = "app.android.keenzen"
-    compileSdk 36
+    namespace = "app.android.mercury"
+    compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.android.keenzen"
-        minSdk 24
-        targetSdk 36
+        applicationId "app.android.mercury"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -23,13 +21,6 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = '17'
     }
 }
 

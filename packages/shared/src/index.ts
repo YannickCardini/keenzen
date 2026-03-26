@@ -2,10 +2,10 @@
 // packages/shared/src/index.ts
 //
 // Point d'entrée unique du package partagé.
-// Import toujours depuis '@keezen/shared', jamais depuis les fichiers directement.
+// Import toujours depuis '@mercury/shared', jamais depuis les fichiers directement.
 //
 // Exemple :
-//   import { MarbleColor, ARRIVAL_POSITIONS, TURN_DURATION_SECONDS } from '@keezen/shared';
+//   import { MarbleColor, ARRIVAL_POSITIONS, TURN_DURATION_SECONDS } from '@mercury/shared';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export * from './types.js';

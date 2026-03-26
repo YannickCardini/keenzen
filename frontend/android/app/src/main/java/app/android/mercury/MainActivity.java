@@ -1,4 +1,4 @@
-package app.android.keenzen;
+package app.android.mercury;
 
 import com.getcapacitor.BridgeActivity;
 

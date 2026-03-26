@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 
-const CHANNEL_NAME = 'keenzen-session';
+const CHANNEL_NAME = 'mercury-session';
 const QUERY_TIMEOUT_MS = 150;
 
 /**

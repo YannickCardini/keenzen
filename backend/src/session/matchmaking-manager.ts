@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import { Game } from '../game/game.js';
 import { MultiWsMessenger } from '../game/game-messenger.js';
 import { GameRegistry } from './game-registry.js';
-import type { GameConfig, MarbleColor } from '@keezen/shared';
+import type { GameConfig, MarbleColor } from '@mercury/shared';
 
 const COLORS: MarbleColor[] = ['red', 'green', 'blue', 'orange'];
 const MATCHMAKING_TIMEOUT_MS = 30_000;

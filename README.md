@@ -1,4 +1,4 @@
-# Keezen
+# Mercury
 
 Implémentation du jeu de société **Tock/Keezen** en TypeScript, avec un backend WebSocket et un frontend Angular/Ionic.
 
@@ -7,7 +7,7 @@ Implémentation du jeu de société **Tock/Keezen** en TypeScript, avec un backe
 ## Structure du projet
 
 ```
-keezen/
+mercury/
 ├── packages/
 │   └── shared/                  ← Package partagé (types, constantes, config plateau)
 │       ├── src/
@@ -60,7 +60,7 @@ keezen/
 
 ---
 
-## Package partagé : `@keezen/shared`
+## Package partagé : `@mercury/shared`
 
 ### Pourquoi ?
 
@@ -69,7 +69,7 @@ Le frontend et le backend partagent naturellement :
 - La **géométrie du plateau** (positions des cases, homes, starts, arrivées)
 - Les **constantes** (durée du tour, durées d'animation, règles)
 
-Sans package partagé, ces données sont dupliquées et divergent — ce qui provoque des bugs difficiles à tracer. Avec `@keezen/shared`, il y a **une seule source de vérité**.
+Sans package partagé, ces données sont dupliquées et divergent — ce qui provoque des bugs difficiles à tracer. Avec `@mercury/shared`, il y a **une seule source de vérité**.
 
 ### Ce que contient chaque fichier
 
@@ -78,7 +78,7 @@ Sans package partagé, ces données sont dupliquées et divergent — ce qui pro
 | `types.ts` | Toutes les interfaces et types TypeScript (`Card`, `Player`, `Action`, `GameState`, messages WebSocket…) |
 | `board-config.ts` | Positions du plateau : cases affichées, chemin principal, homes, starts, arrivées, cases ignorées. Helpers : `getStartPosition()`, `hasWon()`, etc. |
 | `constants.ts` | Durées d'animation des pions, durée du tour, config d'affichage, règles (`ENTER_CARDS`, `CARDS_PER_HAND`…) |
-| `index.ts` | Barrel export — importer toujours depuis `@keezen/shared` |
+| `index.ts` | Barrel export — importer toujours depuis `@mercury/shared` |
 
 ---
 

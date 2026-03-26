@@ -6,7 +6,8 @@ import { Subscription, take } from 'rxjs';
 import { version } from '../../../../package.json';
 import { GameStateService } from '../game/services/game-state.service';
 import { TabLockService } from '../game/services/tab-lock.service';
-import type { MarbleColor } from '@keezen/shared';
+import { AuthService } from '../services/auth.service';
+import type { MarbleColor } from '@mercury/shared';
 import { environment } from 'src/environments/environment';
 import { generateGuestName } from '../shared/guest-name';
 
@@ -17,7 +18,7 @@ import { generateGuestName } from '../shared/guest-name';
   imports: [CommonModule, FormsModule],
 })
 export class HomePage implements OnInit, OnDestroy {
-  readonly titleLetters = ['K', 'E', 'E', 'N', 'Z', 'E', 'N'];
+  readonly titleLetters = ['M', 'E', 'R', 'C', 'U', 'R', 'Y'];
   readonly appVersion = version;
 
   showLogin = false;
@@ -39,7 +40,15 @@ export class HomePage implements OnInit, OnDestroy {
   /** Shown when the WebSocket fails to connect. */
   matchmakingError = false;
 
-  constructor(private router: Router, private gameStateService: GameStateService, private tabLock: TabLockService) { }
+  loginError = false;
+
+  constructor(
+    private router: Router,
+    private gameStateService: GameStateService,
+    private tabLock: TabLockService,
+    readonly auth: AuthService,
+  ) { }
+
   ngOnInit() { }
 
   ngOnDestroy(): void {
@@ -49,6 +58,21 @@ export class HomePage implements OnInit, OnDestroy {
   openLogin() { this.showLogin = true; }
   closeLogin() { this.showLogin = false; }
   switchMode(mode: 'login' | 'signup') { this.loginMode = mode; }
+
+  async loginWithGoogle(): Promise<void> {
+    try {
+      await this.auth.login();
+      this.closeLogin();
+    } catch (err) {
+      console.error('Google login error:', err);
+      this.loginError = true;
+      setTimeout(() => this.loginError = false, 4000);
+    }
+  }
+
+  async logout(): Promise<void> {
+    await this.auth.logout();
+  }
 
   openSettings() { this.showSettings = true; }
   closeSettings() { this.showSettings = false; }

@@ -13,8 +13,8 @@ import {
     TURN_DURATION_MS,
     TURN_TIMEOUT_OFFSET_MS,
     CARDS_PER_HAND,
-} from '@keezen/shared';
-import type { Action, Card, ClientMessage, GameConfig, MarbleColor } from "@keezen/shared";
+} from '@mercury/shared';
+import type { Action, Card, ClientMessage, GameConfig, MarbleColor } from "@mercury/shared";
 
 export class Game {
 

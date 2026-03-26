@@ -29,7 +29,7 @@ import {
   getLegalAction,
   getActionForSteps,
   type LegalMoveContext,
-} from '@keezen/shared';
+} from '@mercury/shared';
 
 export interface CardInfo {
   value: string;

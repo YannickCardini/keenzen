@@ -1,14 +1,4 @@
-ext {
-    compileSdkVersion = 36  // ⬅️ Changez de 34 à 36
-    minSdkVersion = 22
-    targetSdkVersion = 36   // ⬅️ Changez de 34 à 36
-    androidxAppCompatVersion = "1.6.1"
-    androidxCoordinatorLayoutVersion = "1.2.0"
-    coreSplashScreenVersion = "1.0.1"
-    junitVersion = "4.13.2"
-    androidxJunitVersion = "1.1.5"
-    androidxEspressoCoreVersion = "3.5.1"
-}
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
     
@@ -17,14 +7,15 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0"
-        classpath 'com.android.tools.build:gradle:8.9.1'
+        classpath 'com.android.tools.build:gradle:8.13.0'
         classpath 'com.google.gms:google-services:4.4.4'
+
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files
     }
 }
 
+apply from: "variables.gradle"
 
 allprojects {
     repositories {
@@ -36,4 +27,3 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
-

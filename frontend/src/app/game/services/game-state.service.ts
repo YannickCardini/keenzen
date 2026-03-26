@@ -22,7 +22,7 @@ import {
   getValidSevenStepsForMarble,
   getPositionAfterMove,
   type LegalMoveContext,
-} from '@keezen/shared';
+} from '@mercury/shared';
 
 @Injectable({
   providedIn: 'root',

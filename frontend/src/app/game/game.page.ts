@@ -6,7 +6,7 @@ import { GameStateService } from './services/game-state.service';
 import { SoundService } from './services/sound.service';
 import { environment } from '../../environments/environment';
 import { Subscription } from 'rxjs';
-import { NEW_TURN_BANNER_DURATION_MS, GameConfig } from '@keezen/shared';
+import { NEW_TURN_BANNER_DURATION_MS, GameConfig } from '@mercury/shared';
 
 @Component({
   selector: 'app-game',

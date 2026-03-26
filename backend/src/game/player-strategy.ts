@@ -1,4 +1,4 @@
-import type { Action, Card } from '@keezen/shared';
+import type { Action, Card } from '@mercury/shared';
 import type { LegalMoveContext } from '../utils/utils.js';
 
 /**

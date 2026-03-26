@@ -4,7 +4,7 @@ import {
     getLegalSplit7Action,
     MAIN_PATH,
     type LegalMoveContext,
-} from '@keezen/shared';
+} from '@mercury/shared';
 
 export { getLegalAction, findLegalMoveForCard, getLegalSplit7Action, MAIN_PATH };
 export type { LegalMoveContext };

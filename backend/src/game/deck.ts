@@ -1,4 +1,4 @@
-import type { Card } from "@keezen/shared";
+import type { Card } from "@mercury/shared";
 
 export class Deck {
     // Le paquet de cartes (sera modifié pendant la partie)
