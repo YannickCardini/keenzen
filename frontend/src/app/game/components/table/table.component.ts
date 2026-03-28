@@ -17,6 +17,7 @@ import { getValidSevenStepsForMarble, getPositionAfterMove, getLegalSplit7Action
 import { Subscription } from 'rxjs';
 import { Router } from '@angular/router';
 import { SoundService } from '../../services/sound.service';
+import { AuthService } from 'src/app/services/auth.service';
 
 enum TURN_PHASE {
   DISCARD = "No playable moves",
@@ -185,7 +186,7 @@ enum TURN_PHASE {
     return timer > 0 ? this.timeLeft() / timer : 0;
   });
 
-  constructor(protected gameStateService: GameStateService, private soundService: SoundService, private router: Router) {
+  constructor(protected gameStateService: GameStateService, private soundService: SoundService, private router: Router, protected authService: AuthService) {
     // Clear the flying card once the server updates the hand
     effect(() => {
       this.gameStateService.data()?.gameState.hand;

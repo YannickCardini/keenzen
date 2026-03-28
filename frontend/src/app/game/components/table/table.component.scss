@@ -900,6 +900,12 @@
     &__text {
         font-size: 0.8rem;
         color: var(--text-muted);
+        margin: 0 0 0.5rem;
+    }
+
+    &__warning {
+        font-size: 0.75rem;
+        color: #fbbf24;
         margin: 0 0 1.25rem;
     }
 

@@ -5,9 +5,9 @@
   <div class="timeout-banner" [ngClass]="'timeout-banner--' + color">
     <span class="timeout-icon">⏰</span>
     @if (color === gameStateService.myPlayerColor()) {
-      <span>Temps écoulé — l'ordinateur a joué à ta place</span>
+    <span>Temps écoulé — l'ordinateur a joué à ta place</span>
     } @else {
-      <span>Temps écoulé — l'ordinateur a joué pour {{ color }}</span>
+    <span>Temps écoulé — l'ordinateur a joué pour {{ color }}</span>
     }
   </div>
   }
@@ -22,18 +22,20 @@
 
   <!-- ===== RULES BUTTON (top-left corner) ===== -->
   <button class="rules-btn" (click)="rulesRequested.emit()" title="Game Rules">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
     </svg>
   </button>
 
   <!-- ===== RESIGN BUTTON (top-right corner) ===== -->
   @if (gameStateService.myPlayerColor()) {
   <button class="resign-btn" (click)="onResign()" title="Resign">
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-      <line x1="4" y1="22" x2="4" y2="15"/>
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <line x1="4" y1="22" x2="4" y2="15" />
     </svg>
   </button>
   }
@@ -43,11 +45,8 @@
     <div class="timer-ring" [class.urgent]="timeLeft() <= 10" [class.timer-inactive]="!gameStateService.isMyTurn()">
       <svg viewBox="0 0 64 64" width="64" height="64">
         <circle class="timer-bg" cx="32" cy="32" r="27.5" />
-        <circle class="timer-arc"
-          cx="32" cy="32" r="27.5"
-          [style.stroke]="timerColor()"
-          [style.stroke-dasharray]="timerCircumference"
-          [style.stroke-dashoffset]="timerDashOffset()" />
+        <circle class="timer-arc" cx="32" cy="32" r="27.5" [style.stroke]="timerColor()"
+          [style.stroke-dasharray]="timerCircumference" [style.stroke-dashoffset]="timerDashOffset()" />
       </svg>
       <div class="timer-display">
         <span class="timer-number" [class.urgent]="timeLeft() <= 10">{{ timeLeft() }}</span>
@@ -60,62 +59,51 @@
   <div class="hand-zone" [class.turn-inactive]="!gameStateService.isMyTurn()">
     <div class="cards-fan">
       @for (card of getPlayerHand(); track card.id; let i = $index) {
-        <button
-          class="tock-card-btn playable-card"
-          [class.selected]="selectedCardIndex() === i"
-          [class.card-flying-away]="flyingCardIndex() === i"
-          [class.is-red]="card.suit === '♥' || card.suit === '♦'"
-[style]="getCardStyle(i, getPlayerHand().length)"
-          (click)="onCardSelected(i)">
-          <!-- Design de carte factorisé -->
-          <app-tock-card
-            [value]="card.value"
-            [suit]="card.suit">
-          </app-tock-card>
-        </button>
+      <button class="tock-card-btn playable-card" [class.selected]="selectedCardIndex() === i"
+        [class.card-flying-away]="flyingCardIndex() === i" [class.is-red]="card.suit === '♥' || card.suit === '♦'"
+        [style]="getCardStyle(i, getPlayerHand().length)" (click)="onCardSelected(i)">
+        <!-- Design de carte factorisé -->
+        <app-tock-card [value]="card.value" [suit]="card.suit">
+        </app-tock-card>
+      </button>
       } @empty {
-        <div class="empty-hand">Your hand is empty</div>
+      <div class="empty-hand">Your hand is empty</div>
       }
     </div>
   </div>
 
   <!-- ===== SÉLECTEUR DE SPLIT DU 7 ===== -->
   @if (showSevenStepCounter()) {
-  <div class="seven-split-bar"
-       [class.seven-split-bar--split-active]="gameStateService.sevenFirstSteps() < 7"
-       [class.turn-inactive]="!gameStateService.isMyTurn()">
+  <div class="seven-split-bar" [class.seven-split-bar--split-active]="gameStateService.sevenFirstSteps() < 7"
+    [class.turn-inactive]="!gameStateService.isMyTurn()">
 
     <div class="dots-row">
       @for (dot of allSevenDots(); track dot.step) {
-        @if (dot.step > 1) {
-          <div class="dot-connector"
-            [class.dot-connector--marble1]="gameStateService.sevenFirstSteps() < 7 && dot.step <= gameStateService.sevenFirstSteps()"
-            [class.dot-connector--marble2]="gameStateService.sevenFirstSteps() < 7 && dot.step > gameStateService.sevenFirstSteps()"
-            [class.dot-connector--full]="gameStateService.sevenFirstSteps() === 7"
-            [class.dot-connector--split-point]="gameStateService.sevenFirstSteps() < 7 && dot.step === gameStateService.sevenFirstSteps() + 1">
-          </div>
-        }
-        <button class="split-dot"
-          [class.split-dot--marble1]="dot.group === 'marble1'"
-          [class.split-dot--marble2]="dot.group === 'marble2'"
-          [class.split-dot--full]="dot.group === 'full'"
-          [class.split-dot--active]="dot.isActive"
-          [class.split-dot--is-seven]="dot.step === 7"
-          [disabled]="!dot.enabled"
-          (click)="selectSevenSteps(dot.step)">
-          <span class="split-dot__number">{{ dot.step }}</span>
-        </button>
+      @if (dot.step > 1) {
+      <div class="dot-connector"
+        [class.dot-connector--marble1]="gameStateService.sevenFirstSteps() < 7 && dot.step <= gameStateService.sevenFirstSteps()"
+        [class.dot-connector--marble2]="gameStateService.sevenFirstSteps() < 7 && dot.step > gameStateService.sevenFirstSteps()"
+        [class.dot-connector--full]="gameStateService.sevenFirstSteps() === 7"
+        [class.dot-connector--split-point]="gameStateService.sevenFirstSteps() < 7 && dot.step === gameStateService.sevenFirstSteps() + 1">
+      </div>
+      }
+      <button class="split-dot" [class.split-dot--marble1]="dot.group === 'marble1'"
+        [class.split-dot--marble2]="dot.group === 'marble2'" [class.split-dot--full]="dot.group === 'full'"
+        [class.split-dot--active]="dot.isActive" [class.split-dot--is-seven]="dot.step === 7" [disabled]="!dot.enabled"
+        (click)="selectSevenSteps(dot.step)">
+        <span class="split-dot__number">{{ dot.step }}</span>
+      </button>
       }
     </div>
 
     <div class="split-info">
-      @if (gameStateService.sevenFirstSteps() < 7) {
-        <span class="split-info__marble1">{{ gameStateService.sevenFirstSteps() }}</span>
+      @if (gameStateService.sevenFirstSteps() < 7) { <span class="split-info__marble1">{{
+        gameStateService.sevenFirstSteps() }}</span>
         <span class="split-info__divider">/</span>
         <span class="split-info__marble2">{{ 7 - gameStateService.sevenFirstSteps() }}</span>
-      } @else {
+        } @else {
         <span class="split-info__hint">Tap to split</span>
-      }
+        }
     </div>
 
   </div>
@@ -130,10 +118,8 @@
   </div>
 
   <!-- ===== FOOTER ===== -->
-  <div class="control-dashboard"
-       [class.turn-inactive]="!gameStateService.isMyTurn()"
-       [style.border-top-color]="gameStateService.myPlayerColor() ?? ''"
-       [style.box-shadow]="gameStateService.myPlayerColor()
+  <div class="control-dashboard" [class.turn-inactive]="!gameStateService.isMyTurn()"
+    [style.border-top-color]="gameStateService.myPlayerColor() ?? ''" [style.box-shadow]="gameStateService.myPlayerColor()
          ? '0 -4px 16px ' + getMyColorGlow()
          : ''">
     <div class="dashboard-grid">
@@ -146,9 +132,7 @@
         </div>
       </div>
 
-      <button class="action-btn"
-        [class.action-btn--discard]="isDiscardMode()"
-        [disabled]="!confirmOrDiscardEnabled()"
+      <button class="action-btn" [class.action-btn--discard]="isDiscardMode()" [disabled]="!confirmOrDiscardEnabled()"
         (click)="onConfirmOrDiscard()">
         {{ confirmOrDiscardLabel() }}
       </button>
@@ -162,6 +146,9 @@
     <div class="resign-dialog" (click)="$event.stopPropagation()">
       <p class="resign-dialog__title">Abandon the game?</p>
       <p class="resign-dialog__text">You will not be able to rejoin this game.</p>
+      @if (authService.user$ | async) {
+      <p class="resign-dialog__warning">Resigning will cause you to lose ranking points and drop in the leaderboard</p>
+      }
       <div class="resign-dialog__actions">
         <button class="resign-dialog__cancel" (click)="cancelResign()">Cancel</button>
         <button class="resign-dialog__confirm" (click)="confirmResign()">Resign</button>
