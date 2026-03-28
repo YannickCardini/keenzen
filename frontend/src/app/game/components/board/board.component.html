@@ -167,6 +167,7 @@
         </div>
       </div>
       <div class="profile-panel__since">{{ computeMemberSince(data.createdAt) }}</div>
+      <button class="profile-panel__leaderboard-btn" (click)="goToLeaderboard()">View leaderboard</button>
     } @else {
       <div class="profile-panel__error">Could not load profile</div>
     }

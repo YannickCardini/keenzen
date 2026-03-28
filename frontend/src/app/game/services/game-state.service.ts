@@ -266,6 +266,17 @@ export class GameStateService {
   // ── Connexion ─────────────────────────────────────────────────────────────
 
   connect(url: string, onOpen?: () => void): void {
+    // Silence any stale handlers before replacing the socket, so that the
+    // old WebSocket closing does not emit sessionReplaced$ or connectionError$.
+    if (this.ws) {
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onerror = null;
+      this.ws.onclose = null;
+      this.ws.close();
+      this.ws = null;
+    }
+
     this.ws = new WebSocket(url);
 
     this.ws.onopen = () => {

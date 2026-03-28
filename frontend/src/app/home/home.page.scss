@@ -363,6 +363,27 @@ $bg-mid: #1a2840;
   color: $c-red;
 }
 
+// ─── Resume game banner ───────────────────────────────────────────────────────
+.resume-game-banner {
+  background: rgba($c-green, 0.12);
+  border: 1px solid rgba($c-green, 0.4);
+  color: $c-green;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  text-align: center;
+  max-width: 340px;
+  width: 100%;
+  cursor: pointer;
+  font-family: inherit;
+  animation: fadeInBanner 0.3s ease;
+
+  &:hover {
+    background: rgba($c-green, 0.22);
+    border-color: rgba($c-green, 0.7);
+  }
+}
+
 // ─── Action buttons ───────────────────────────────────────────────────────────
 .hero-actions {
   display: flex;

@@ -26,6 +26,7 @@ export class HomePage implements OnInit, OnDestroy {
   showRules = false;
   showMatchmaking = false;
   loginMode: 'login' | 'signup' = 'login';
+  activeGame = false;
 
   // ── Edit profile state ─────────────────────────────────────────────────────
   editingProfile = false;
@@ -60,7 +61,12 @@ export class HomePage implements OnInit, OnDestroy {
     readonly auth: AuthService,
   ) { }
 
+  private hasActiveGame(): boolean {
+    return !!(localStorage.getItem('active_game_id') && localStorage.getItem('guest_player_id'));
+  }
+
   ngOnInit(): void {
+    this.activeGame = this.hasActiveGame();
     this.loginErrorSub = this.auth.loginError$.subscribe(type => {
       this.loginErrorMessage = type === 'server'
         ? 'Server error. Please try again later.'
@@ -157,6 +163,8 @@ export class HomePage implements OnInit, OnDestroy {
     await this.auth.logout();
   }
 
+  resumeGame(): void { this.router.navigate(['/game']); }
+
   openSettings() { this.showSettings = true; }
   closeSettings() { this.showSettings = false; }
 
@@ -166,6 +174,11 @@ export class HomePage implements OnInit, OnDestroy {
   // ── Matchmaking ────────────────────────────────────────────────────────────
 
   async openMatchmaking(): Promise<void> {
+    if (this.hasActiveGame()) {
+      this.router.navigate(['/game']);
+      return;
+    }
+
     // Prevent duplicate matchmaking from multiple tabs
     if (await this.tabLock.isOtherTabActive()) {
       this.duplicateTabMessage = true;

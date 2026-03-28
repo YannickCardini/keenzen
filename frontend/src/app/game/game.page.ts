@@ -84,7 +84,15 @@ export class GamePage implements OnDestroy, AfterViewInit {
   }
 
   connect(): void {
-    this.gameStateService.connect(environment.wsUrl, () => this.sendStart());
+    this.gameStateService.connect(environment.wsUrl, () => {
+      const activeGameId = localStorage.getItem('active_game_id');
+      const guestPlayerId = localStorage.getItem('guest_player_id');
+      if (activeGameId && guestPlayerId) {
+        this.gameStateService.sendJoinGame(guestPlayerId, activeGameId);
+      } else {
+        this.sendStart();
+      }
+    });
   }
 
   disconnect(): void {

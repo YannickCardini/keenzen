@@ -1,186 +1,71 @@
-================================================================================
-MERCURY — TODO LIST
-================================================================================
+## TODO — Mercury
 
---------------------------------------------------------------------------------
-BUG 1 — Sign-in error persists after backend recovery (requires page refresh)
---------------------------------------------------------------------------------
+---
 
-Context:
-  - Auth flow uses a Google OAuth redirect: `AuthService.login()` calls
-    `GoogleSignIn.signIn()`, which redirects the page to Google, then Google
-    redirects back with an `id_token` in `window.location.hash`.
-  - The `AuthService` constructor detects the hash and calls
-    `handleRedirectCallback()`, which POSTs the idToken to `POST /api/auth/google`.
-  - If the backend is down, the POST fails, `loginError$.next('server')` is
-    emitted, and the error banner appears for 4 seconds.
-  - When the user retries, `GoogleSignIn.signIn()` is called again. However, the
-    stale `id_token` is still present in `window.location.hash`. The Capacitor
-    plugin may short-circuit and reuse the old (possibly expired) token instead
-    of starting a fresh OAuth redirect, causing the POST to fail again.
-  - A full page refresh clears the hash, which is why it fixes the issue.
+### 1. Redesign game rules display & replace the "Game Rules" button with a "Leaderboard" button
 
-Files to modify:
-  - `frontend/src/app/services/auth.service.ts`
+**Context:**
+- The game rules modal (`rules-card`) is defined in `frontend/src/app/home/home.page.html` (the `showRules` overlay, lines ~347–482).
+- It is currently only triggered from the "Game Rules" button (`rules-btn`) in the home page hero action buttons (`frontend/src/app/home/home.page.html`, lines ~92–99), via `openRules()` in `home.page.ts`.
+- The settings/info modal (`showSettings`) is accessible from the footer gear icon and currently only shows version/contact info.
+- The `table.component` (`frontend/src/app/game/components/table/table.component.html`) has no access to the game rules during a game session.
+- The leaderboard page exists at `/leaderboard` (`frontend/src/app/leaderboard/`).
 
-Steps:
-  1. At the END of `handleRedirectCallback()` (in both the `try` and `catch`
-     branches, or in a `finally` block), clear the URL hash so the stale
-     `id_token` is removed:
-       history.replaceState(null, '', window.location.pathname + window.location.search);
-  2. This ensures that when the user retries, `GoogleSignIn.signIn()` initiates
-     a fresh OAuth redirect rather than processing a stale token from the URL.
+**Tasks:**
+1. Replace the "Game Rules" button (`.rules-btn`) in the home page hero action buttons with a "Leaderboard" button that navigates to the `/leaderboard` route using Angular Router.
+2. Add a "Game Rules" link or button inside the settings/info modal (`showSettings` overlay in `home.page.html`) 
+so rules remain accessible from the home page without a dedicated hero button.
+3. Add a way to open the game rules from within the game — add a rules trigger button or link inside `table.component.html` (e.g., near the resign button or in the control dashboard area). This requires:
+   - Either extracting the rules content into a shared component (e.g., `GameRulesModalComponent`) usable in both `home.page` and `game.page` / `table.component`.
+   - Or emitting an event from `table.component` to `game.page` to show the rules modal.
+4. Redesign the visual appearance of the game rules modal (`rules-card` and its inner elements) to be more polished and consistent with the rest of the UI.
 
---------------------------------------------------------------------------------
-BUG 2 — Player info panel shows "Guest player / Not signed in" for authenticated users
---------------------------------------------------------------------------------
+---
 
-Context:
-  - When hovering or clicking on a player's avatar in the board, the profile
-    panel (`board.component.ts:openProfilePanel`) checks `player?.userId` to
-    determine whether the player is a guest (`isGuest = !player?.userId`).
-  - If `userId` is missing from the `Player` object in the game state, the panel
-    always shows "Guest player — Not signed in".
-  - The root cause: `sendJoinMatchmaking()` in `game-state.service.ts:411` does
-    not include `userId` in the WebSocket message, even though the
-    `JoinMatchmakingMessage` type (defined in `packages/shared/src/types.ts:211`)
-    has a `userId?: string` field.
-  - In `home.page.ts:113-115`, `sendJoinMatchmaking(playerName, playerPicture)`
-    is called but the authenticated user's `id` (`user?.id`) is never passed.
+### 2. Show points-loss warning in the resign confirmation dialog (authenticated players only)
 
-Files to modify:
-  1. `frontend/src/app/game/services/game-state.service.ts`
-     - Add a `userId?: string` parameter to `sendJoinMatchmaking(playerName?, picture?, userId?)`.
-     - Include `userId` in the JSON message sent to the backend:
-         { type: 'joinMatchmaking', playerName, browserId, picture, userId }
+**Context:**
+- The resign confirmation dialog is inside `frontend/src/app/game/components/table/table.component.html` (the `resign-overlay` / `resign-dialog` block, lines ~151–163).
+- It currently displays: "Abandon the game?" and "You will not be able to rejoin this game."
+- The player's authentication state is accessible via `AuthService` (`frontend/src/app/services/auth.service.ts`), which exposes `user$` (an Observable of the logged-in user or `null`).
+- `GameStateService` provides `myPlayerColor()` signal. Cross-referencing with the game state players list allows determining if the current player has a `userId` (i.e., is authenticated).
+- Losing a game causes the backend to deduct points from the authenticated user's score (see `backend/src/game/game.ts`).
 
-  2. `frontend/src/app/home/home.page.ts`
-     - In `openMatchmaking()`, retrieve `user?.id` alongside `user?.name` and
-       `user?.picture`.
-     - Pass it as the third argument:
-         this.gameStateService.sendJoinMatchmaking(playerName, playerPicture, user?.id);
+**Tasks:**
+1. In `table.component.ts`, inject `AuthService` and read the current authenticated user.
+2. In the resign dialog (`resign-dialog`), conditionally show an additional warning line when the user is authenticated (i.e., `auth.user$ | async` is non-null). The warning should say something like: *"As a registered player, resigning will cost you points."*
+3. The warning must be hidden for guest players (unauthenticated users).
 
-  Note: Verify that the backend's matchmaking handler (`session-manager.ts` or
-  `matchmaking-manager.ts`) correctly reads `userId` from `JoinMatchmakingMessage`
-  and passes it into the `PlayerConfig`, so it ends up in the `Player` object
-  broadcast in the game state.
+---
 
---------------------------------------------------------------------------------
-FEATURE 3 — Profile editing in the login modal (name + profile picture)
---------------------------------------------------------------------------------
+### 3. Fix player info panel overflow out of the viewport / board bounds
 
-Context:
-  - When a user is signed in, the login modal (`home.page.html:135-143`) shows
-    their avatar, name, stats, and a logout button — but no way to edit their
-    profile.
-  - The `UserDoc` in Cosmos DB (managed by `backend/src/auth/auth-router.ts`)
-    stores `name` and `picture` fields that currently only come from Google at
-    first login.
-  - A new `PATCH /api/auth/user/:id` backend endpoint and new frontend editing
-    UI are required.
+**Context:**
+- The profile panel is rendered as a `position: fixed` element in `frontend/src/app/game/components/board/board.component.html` (lines ~127–175) and styled in `board.component.scss` (`.profile-panel`, lines ~1272+).
+- Its position is calculated in `openProfilePanel()` inside `board.component.ts` (lines ~822–853).
+- The current logic uses `PANEL_W = 224` and `PANEL_H = 200` as estimated panel dimensions to clamp `x` and `y` within the viewport.
+- The actual panel height can exceed 200px when profile data is loaded (it includes photo, name, rank, points, member-since date, and a leaderboard button), causing the bottom of the panel to overflow below the viewport or behind the board.
+- For players whose avatars are positioned near the edge of the screen (e.g., the green player in the top-right corner of the board), the panel can overflow the visible area.
 
-Sub-tasks:
+**Tasks:**
+1. In `openProfilePanel()` in `board.component.ts`, increase `PANEL_H` to better reflect the real panel height (approx. 260–280px based on its content), **or** implement a post-render clamp: after the panel is first rendered, read its actual `offsetHeight` via a `ViewChild` or `ElementRef` and re-clamp `y` if necessary.
+2. Ensure the panel never overflows on any side (top, bottom, left, right) for all four player positions. Test especially for the green player (top-right of board) and the orange player.
+3. Optionally, adjust the preferred panel opening direction per player position (e.g., open downward instead of rightward for top-edge players) to avoid the panel visually colliding with the board.
 
-  A. Backend — Add PATCH /api/auth/user/:id endpoint
-     File: `backend/src/auth/auth-router.ts`
+---
 
-     - Add a `PATCH /api/auth/user/:id` route.
-     - The request body accepts: `{ name?: string, picture?: string }`.
-     - Validate `name`:
-         - Must be between 1 and 30 characters.
-         - Allowed characters: letters (unicode), digits, spaces, hyphens,
-           underscores, apostrophes. Reject anything else (especially `<`, `>`,
-           `"`, `&`, backticks, etc.) to prevent XSS/injection.
-     - Validate `picture` (if provided):
-         - Accept only a base64-encoded data URL with MIME type `image/jpeg`,
-           `image/png`, or `image/webp`.
-         - Reject data URLs that exceed 2 MB of raw base64 content.
-         - Reject any non-data-URL value (external URLs are not accepted).
-     - If validation passes, update the `name` and/or `picture` fields of the
-       `UserDoc` in Cosmos DB (use `container.item(id, id).replace(...)`).
-     - Return the updated user object (same shape as `POST /api/auth/google`
-       response: `{ id, email, name, picture, points, ranking, createdAt }`).
+### 4. Add a mute/unmute sound button inside the table component
 
-  B. Frontend — Add update method to AuthService
-     File: `frontend/src/app/services/auth.service.ts`
+**Context:**
+- The `SoundService` is at `frontend/src/app/game/services/sound.service.ts`. It currently has no mute state — all `play*()` methods synthesize or play audio unconditionally.
+- The `table.component.html` has a resign button (`.resign-btn`, an SVG icon button at the top-right corner) defined in `frontend/src/app/game/components/table/table.component.html` (lines ~23–31).
+- All game sounds are played through `SoundService`, injected in both `board.component.ts` and `table.component.ts`.
 
-     - Add a method `updateProfile(name: string, picture: string): Promise<void>`.
-     - It sends `PATCH ${environment.apiUrl}/api/auth/user/${user.id}` with
-       `{ name, picture }`.
-     - On success, update `user$.next(updatedUser)` and overwrite
-       `localStorage` (same key `auth_user`).
-     - Expose an `updateError$` Subject<string> to surface validation errors.
-
-  C. Frontend — Add editing UI in the login modal
-     Files: `frontend/src/app/home/home.page.html`,
-             `frontend/src/app/home/home.page.ts`
-
-     - In the authenticated section of the modal (the `*ngIf="auth.user$ | async as user"` block),
-       add an "Edit profile" toggle button next to the logout button.
-     - When toggled, show an edit form containing:
-         1. A text input for the display name (pre-filled with `user.name`),
-            with a maxlength of 30 and a pattern or validation feedback.
-         2. A file input for the profile picture, accepting only
-            `image/jpeg,image/png,image/webp` and limited to 2 MB client-side.
-            Show a preview of the selected image before saving.
-         3. A "Save" button (disabled while saving).
-         4. An error message area if validation or the API call fails.
-     - In `home.page.ts`:
-         - When the user selects a file, read it with `FileReader.readAsDataURL()`,
-           validate the MIME type and file size client-side before sending.
-         - Reject images where either dimension exceeds 512 px (use an
-           `<img>` drawn onto an `OffscreenCanvas` to check dimensions).
-         - On "Save", call `auth.updateProfile(name, base64DataUrl)` and close
-           the edit form on success.
-
---------------------------------------------------------------------------------
-FEATURE 4 — Leaderboard page (new frontend route)
---------------------------------------------------------------------------------
-
-Context:
-  - The backend already exposes `GET /api/auth/leaderboard`, which returns an
-    array of the top 100 users sorted by points descending:
-      `[{ name, picture, points, ranking }, ...]`
-  - There is no frontend page for this yet.
-  - The leaderboard should be reachable from the player info panel that appears
-    when hovering/clicking on a player's avatar in the board.
-
-Sub-tasks:
-
-  A. Create the LeaderboardPage component
-     Files to create:
-       `frontend/src/app/leaderboard/leaderboard.page.ts`
-       `frontend/src/app/leaderboard/leaderboard.page.html`
-       `frontend/src/app/leaderboard/leaderboard.page.scss`
-
-     - Standalone Angular component.
-     - On init, call `GET ${environment.apiUrl}/api/auth/leaderboard` via
-       `HttpClient` and store the result in a signal.
-     - Display a ranked list. For each entry show:
-         - Rank number (1-based, derived from array index).
-         - Profile picture (`<img>` with `referrerpolicy="no-referrer"`).
-         - Display name.
-         - Points.
-     - Show a loading indicator while the request is in flight.
-     - Show an error message if the request fails.
-     - Include a back-navigation button (e.g., `<ion-back-button>` or a plain
-       button calling `Location.back()`) so the user can return to the previous page.
-
-  B. Register the route
-     File: `frontend/src/app/app.routes.ts`
-
-     - Add a lazy-loaded route:
-         { path: 'leaderboard', loadComponent: () => import('./leaderboard/leaderboard.page').then(m => m.LeaderboardPage) }
-
-  C. Add a "Leaderboard" link in the profile panel
-     Files: `frontend/src/app/game/components/board/board.component.html`,
-             `frontend/src/app/game/components/board/board.component.ts`
-
-     - In the profile panel HTML, in the authenticated player section (where
-       `ProfileData` is shown: name, points, ranking, member since), add a
-       "View leaderboard" link or button.
-     - This link should navigate to `/leaderboard` using Angular Router
-       (`routerLink="/leaderboard"` or `router.navigate(['/leaderboard'])`).
-     - The link should appear for authenticated players only (i.e., when
-       `!panel.isGuest`), not for guests.
-     - Inject `Router` into `BoardComponent` if not already present.
+**Tasks:**
+1. Add a `muted` boolean signal (defaulting to `false`) to `SoundService`. At the start of every `play*()` method, return early if `muted` is `true`.
+2. Add a public `toggleMute()` method (or `setMuted(value: boolean)`) to `SoundService`.
+3. In `table.component.html`, add a mute/unmute icon button at the top-left of the `.game-board` container, visually mirroring the resign button style (icon-only, same size and visual weight as `.resign-btn`).
+   - Use a speaker-on SVG icon when sound is enabled, and a speaker-off (muted) SVG icon when muted.
+   - The button should call `soundService.toggleMute()` on click.
+4. The mute state should survive for the duration of the game session (it does not need to persist across page reloads, but storing it in `localStorage` is a bonus).
+5. Assess visual harmony with the resign button: both buttons should be consistent in shape, size, and position (resign top-right, mute top-left).

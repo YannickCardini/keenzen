@@ -64,6 +64,11 @@
         {{ loginErrorMessage }}
       </div>
 
+      <!-- Resume game banner -->
+      <button class="resume-game-banner" *ngIf="activeGame" (click)="resumeGame()">
+        You have an ongoing game &mdash; Resume &rarr;
+      </button>
+
       <!-- Action buttons -->
       <div class="hero-actions">
         <button class="action-btn play-btn" (click)="openMatchmaking()">

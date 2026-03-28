@@ -1,0 +1,38 @@
+<div class="lb-wrap">
+  <div class="lb-card">
+    <div class="lb-header">
+      <button class="lb-back" (click)="goBack()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+        Back
+      </button>
+      <h1 class="lb-title">Leaderboard</h1>
+    </div>
+
+    @if (loading()) {
+      <div class="lb-state">
+        <div class="lb-spinner"></div>
+      </div>
+    } @else if (error()) {
+      <div class="lb-state lb-state--error">{{ error() }}</div>
+    } @else {
+      <ol class="lb-list">
+        @for (entry of entries(); track entry.ranking; let i = $index) {
+          <li class="lb-row" [class.lb-row--top3]="i < 3">
+            <span class="lb-rank" [class.lb-rank--gold]="i === 0" [class.lb-rank--silver]="i === 1" [class.lb-rank--bronze]="i === 2">
+              {{ i + 1 }}
+            </span>
+            @if (entry.picture) {
+              <img class="lb-avatar" [src]="entry.picture" [alt]="entry.name" referrerpolicy="no-referrer" />
+            } @else {
+              <div class="lb-avatar lb-avatar--fallback"></div>
+            }
+            <span class="lb-name">{{ entry.name }}</span>
+            <span class="lb-points">{{ entry.points }} pts</span>
+          </li>
+        }
+      </ol>
+    }
+  </div>
+</div>

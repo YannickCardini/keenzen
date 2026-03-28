@@ -6,6 +6,7 @@ import { CommonModule } from '@angular/common';
 import { TockCardComponent } from 'src/app/shared/tock-card.component';
 import { Subscription, firstValueFrom } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { environment } from 'src/environments/environment';
 
 import {
@@ -176,6 +177,7 @@ export class BoardComponent implements OnInit, OnDestroy {
 
   // ── Profile panel ────────────────────────────────────────────────────────────
   private http = inject(HttpClient);
+  private router = inject(Router);
   readonly isHoverDevice = window.matchMedia('(hover: hover)').matches;
   profilePanel = signal<ProfilePanelState | null>(null);
   private panelCloseTimer?: ReturnType<typeof setTimeout>;
@@ -861,5 +863,9 @@ export class BoardComponent implements OnInit, OnDestroy {
     if (months < 12) return `Member for ${months} month${months > 1 ? 's' : ''}`;
     const years = Math.floor(months / 12);
     return `Member for ${years} year${years > 1 ? 's' : ''}`;
+  }
+
+  goToLeaderboard(): void {
+    this.router.navigate(['/leaderboard']);
   }
 }
