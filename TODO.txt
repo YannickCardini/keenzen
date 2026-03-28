@@ -1,306 +1,186 @@
-═══════════════════════════════════════════════════════════════
- MERCURY — TODO LIST
-═══════════════════════════════════════════════════════════════
-
-────────────────────────────────────────────────────────────────
- 1. Sign-in error: display on home page when modal is closed
-────────────────────────────────────────────────────────────────
-
-Context:
-  - Auth errors are emitted via `auth.loginError$` in `auth.service.ts`.
-  - In `home.page.ts` (ngOnInit), when `loginError$` fires, the code
-    currently sets `this.showLogin = true`, which forces the login modal
-    open even if the user had dismissed it.
-  - The login-error banner (`login-error-banner`) is inside the login
-    modal, so it is never shown when the modal is closed.
-
-What to do:
-  1. In `home.page.ts`, when `loginError$` fires, do NOT open the login
-     modal (`showLogin`) if it is already closed (i.e., do not set
-     `this.showLogin = true` on error).
-  2. Add a separate error banner to `home.page.html` (outside all modals,
-     e.g. near the existing `duplicate-tab-banner` and
-     `connection-error-banner` banners) that is conditionally visible
-     when `loginError` is true AND `showLogin` is false.
-  3. The in-modal banner (`login-error-banner`) should remain for errors
-     that occur while the modal is open.
-
-
-────────────────────────────────────────────────────────────────
- 2. Sign-in: add loading state during backend verification
-────────────────────────────────────────────────────────────────
-
-Context:
-  - On web, `GoogleSignIn.signIn()` (called in `auth.service.ts`) redirects
-    the page to Google and returns. When Google redirects back, the token
-    is in the URL hash and `handleRedirectCallback()` is called
-    automatically in the `AuthService` constructor.
-  - `handleRedirectCallback()` posts the idToken to
-    `POST /api/auth/google` — this HTTP call can take a noticeable amount
-    of time.
-  - On native (Android), `GoogleSignIn.signIn()` returns an idToken
-    directly (no page redirect), but the subsequent backend verification
-    call in `handleRedirectCallback()` still takes time.
-  - Currently there is no loading indicator during this backend round-trip.
-
-What to do:
-  1. Add a `isLoading` signal (or BehaviorSubject) to `auth.service.ts`
-     that is set to `true` at the start of `handleRedirectCallback()` and
-     back to `false` when it completes (success or error).
-  2. In `home.page.html`, display a spinner/loading indicator on the
-     Google Sign-In button (or modal area) while `auth.isLoading` is true.
-     Disable the button during loading to prevent duplicate requests.
-
-
-────────────────────────────────────────────────────────────────
- 3. Board player cards: use profile picture and account name
-────────────────────────────────────────────────────────────────
-
-Context:
-  - In `board.component.html`, each `.player-card` renders an
-    `.avatar-ring > .avatar-color` (a solid color circle) and a
-    `.player-name` from `getDisplayName(player)`.
-  - `getDisplayName()` in `board.component.ts` truncates `player.name`
-    to 8 characters.
-  - The `Player` interface in `packages/shared/src/types.ts` does not
-    have a `picture` field.
-  - `AuthService` stores the logged-in user's `picture` (Google avatar
-    URL) and `name`, but this data is not propagated to the game state.
-
-What to do:
-
-  Part A — Add `picture` to the Player type and game state:
-    1. Add `picture?: string` to the `Player` interface in
-       `packages/shared/src/types.ts`.
-    2. In the backend (`backend/src/game/player.ts`), add a `picture`
-       property to the `Player` class (optional, set when the player is
-       authenticated via Google).
-    3. When creating a game and an authenticated user joins (via
-       `auth-router.ts` → Cosmos DB user), populate `player.picture`
-       with the user's `picture` URL from the database.
-    4. Ensure `player.picture` is included when the backend serializes
-       `GameState` (i.e., in the `players` array of `GameStateMessage`).
-
-  Part B — Display the picture in the board:
-    1. In `board.component.html`, inside `.avatar-ring`, conditionally
-       render an `<img>` tag (same dimensions as the current `.avatar-color`
-       circle) if `player.picture` is set. Otherwise, keep the current
-       `.avatar-color` solid circle as fallback.
-
-  Part C — Display the account name in the board:
-    1. Replace the current `getDisplayName()` logic in `board.component.ts`
-       with the following name resolution (applied when `player.picture`
-       is set, indicating the player is authenticated):
-         a. Extract first name: the substring before the first space.
-         b. Extract last name: the substring after the last space.
-         c. Max display length: 8 characters.
-         d. Priority:
-            - If first name ≤ 8 chars → display first name.
-            - Else if last name ≤ 8 chars → display last name.
-            - Else → display first name truncated to 8 chars.
-    2. For guest players (no `player.picture`), keep the existing
-       truncation behavior (truncate `player.name` to 8 chars).
-
-
-────────────────────────────────────────────────────────────────
- 4. Matchmaking modal: disable close-on-backdrop-click
-────────────────────────────────────────────────────────────────
-
-Context:
-  - In `home.page.html`, the matchmaking modal overlay is:
-      <div class="modal-overlay" [class.active]="showMatchmaking"
-           (click)="cancelMatchmaking()">
-    Clicking the backdrop (outside the modal card) calls
-    `cancelMatchmaking()`, which disconnects the WebSocket and cancels
-    the matchmaking search.
-  - This is intentional for other modals (login, settings, rules) but
-    NOT desired for matchmaking: the user should only be able to cancel
-    via the explicit "Cancel" button inside the modal.
-
-What to do:
-  1. In `home.page.html`, remove `(click)="cancelMatchmaking()"` from
-     the matchmaking modal overlay `<div class="modal-overlay ...">`.
-  2. The "Cancel" button inside the modal (and the X close button) must
-     remain the only way to cancel matchmaking and close the modal.
-  3. Verify that the other modals (login, settings, rules) retain their
-     existing backdrop-click-to-close behavior (they are unrelated and
-     should not be modified).
-
-
-────────────────────────────────────────────────────────────────
- 5. Bug: double timer instance causing 2× speed and duplicate sounds
-────────────────────────────────────────────────────────────────
-
-Context:
-  - The turn timer (30-second countdown) is managed in `TableComponent`
-    (`table.component.ts`) via a `setInterval` in `startTimer()`.
-  - `startTimer()` is called from an `ngOnInit` subscription to
-    `gameStateService.newTurn` (a `BehaviorSubject`).
-  - Two bugs cause two simultaneous timer instances:
-
-    Bug A — Subscription leak:
-      In `ngOnInit`, the `newTurn.subscribe(...)` call is not assigned
-      to a variable and is therefore never unsubscribed in `ngOnDestroy`.
-      If the `TableComponent` is destroyed and recreated (e.g. by Angular
-      re-rendering the game page), the old subscription remains active on
-      the BehaviorSubject alongside the new one. Both subscriptions call
-      `startTimer()` independently, resulting in two `setInterval` loops
-      running simultaneously. This makes the timer decrement 2 seconds
-      per second (turn ends in 15s instead of 30s) and causes all
-      timer-triggered effects (countdown tick sounds, time-up sound,
-      `sendTurnTimeout()`) to fire twice.
-
-    Bug B — BehaviorSubject replay on subscribe:
-      `newTurn` is a `BehaviorSubject` (not a plain `Subject`). On each
-      new subscription it immediately emits its last stored value. If
-      `TableComponent` subscribes after a turn has already started (e.g.
-      on reconnect or re-render), `startTimer()` is called once on
-      subscription (from the replayed value) and again when the next
-      real new-turn event fires.
-
-  Symptoms:
-    - Timer counts down at double speed (2 seconds lost per real second).
-    - Countdown tick sound (< 5 s remaining) plays twice per tick.
-    - Time-up sound and `sendTurnTimeout()` trigger twice.
-    - Bot auto-play sound fires twice when the server auto-plays.
-
-What to do:
-  1. In `table.component.ts` (`ngOnInit`), store the subscription from
-     `gameStateService.newTurn.subscribe(...)` in a class property
-     (e.g. `private newTurnSub?: Subscription`) and unsubscribe it in
-     `ngOnDestroy`, just like `timeoutSub` and `autoPlaySub` are handled.
-  2. To prevent the BehaviorSubject's initial replay from triggering an
-     unwanted `startTimer()` call on subscribe, apply `.pipe(skip(1))`
-     before subscribing (skip the replayed current value, only react to
-     genuinely new turn events emitted after subscription), OR change
-     `newTurn` from a `BehaviorSubject` to a plain `Subject` in
-     `game-state.service.ts` if there is no other consumer that relies
-     on the replay behavior.
-
-
---------------------------------------------------------------------------------
- 6. Update player points in the database after each game outcome
---------------------------------------------------------------------------------
-
-When a connected (non-guest) player's game ends, update their `points` field in
-Cosmos DB. Apply the following point deltas:
-  - Win:    +3
-  - Loss:   -1
-  - Abandon (disconnect while game is in progress): -2
-
-Files:
-  - backend/src/db.ts
-  - backend/src/game/game.ts
-  - backend/src/session/session-manager.ts
-  - backend/src/auth/auth-router.ts  (if a dedicated endpoint is needed)
-
-Steps:
-  1. In db.ts, add a function:
-       updateUserPoints(userId: string, delta: number): Promise<void>
-     that increments the `points` field of the user document with the given
-     userId (use Cosmos DB's patch or replace operation with $inc or equivalent).
-
-  2. After updating points, call recomputeRankings() (see task 7) to keep the
-     ranking field current.
-
-  3. In game.ts, when the game ends (first player gets all marbles to arrival):
-       - Identify which players are authenticated (have a Google userId, not a
-         guest ID).
-       - Call updateUserPoints(userId, +3) for the winner.
-       - Call updateUserPoints(userId, -1) for each losing authenticated player.
-
-  4. In session-manager.ts (or game.ts), detect when a WebSocket closes while
-     the game is still in progress (player disconnects without game ending):
-       - If the disconnected player is authenticated, call
-         updateUserPoints(userId, -2).
-       - Do not apply this penalty if the game had already ended naturally.
-
-  5. Guest players (no Google account) are unaffected — do not attempt any DB
-     update for them.
-
---------------------------------------------------------------------------------
- 7. Show a player profile panel on avatar click (or hover on web)
---------------------------------------------------------------------------------
-
-Clicking on a player's avatar ring (or hovering on desktop) must open a panel
-displaying that player's full profile information.
-
-Panel contents:
-  - Full name (user.name from Google)
-  - Profile photo (larger version of user.picture)
-  - Total points (user.points)
-  - Ranking (user.ranking — their position in the global leaderboard)
-  - Time since account creation, computed from user.createdAt
-    (e.g., "Member for 3 months", "Member for 1 year")
-
-Files:
-  - frontend/src/app/game/components/table/table.component.ts
-  - frontend/src/app/game/components/board/board.component.ts (if avatar rings
-    appear there too)
-  - frontend/src/app/services/auth.service.ts
-  - backend/src/auth/auth-router.ts  (may need GET /api/user/:id endpoint)
-
-Steps:
-  1. Add a (click) handler on each avatar ring in table.component.ts.
-     On web, also add a (mouseenter)/(mouseleave) handler for hover behavior.
-
-  2. When triggered, open an Ionic <ion-popover> or <ion-modal> showing the
-     panel contents listed above.
-
-  3. For the currently authenticated user: read data directly from AuthService
-     (no extra request needed).
-
-  4. For other players: the profile data (name, picture, points, ranking) must
-     be available. Options (choose the simplest one):
-       a. Include public profile fields (name, picture, points, ranking) in the
-          game state sent over WebSocket so the frontend already has them.
-       b. Or add a GET /api/user/:id endpoint in auth-router.ts that returns
-          { name, picture, points, ranking, createdAt } for a given userId, and
-          call it when the panel is opened.
-
-  5. Compute "time since joining" client-side from user.createdAt (ISO string).
-     Use a human-readable format (e.g., "Member for 3 months").
-
-  6. Ensure the panel:
-       - Closes when clicking outside it or pressing Escape.
-       - Works on mobile (tap to open, tap outside to close).
-       - Works on web (hover opens, mouse-leave closes; click also toggles).
-
-  7. If a player is a guest (no Google account), either disable the panel or
-     show a minimal version ("Guest player — not signed in").
-
---------------------------------------------------------------------------------
- 8. Implement the ranking (leaderboard ladder) system
---------------------------------------------------------------------------------
-
-A player's ranking is their integer position in the global leaderboard, ordered
-by points descending. The player with the most points is ranked #1. Players with
-equal points share the same rank (dense ranking).
-
-The `ranking` field already exists on every user document in Cosmos DB.
-
-Files:
-  - backend/src/db.ts
-  - backend/src/auth/auth-router.ts
-
-Steps:
-  1. In db.ts, implement:
-       recomputeRankings(): Promise<void>
-     - Fetch all users from the `users` collection, ordered by `points` DESC.
-     - Assign integer ranks starting at 1 (use dense ranking: users with equal
-       points get the same rank, the next rank is the next integer, not skipped).
-     - Batch-update each user's `ranking` field in Cosmos DB.
-     - This function must be called after every updateUserPoints() call (task 5).
-
-  2. In auth-router.ts, add:
-       GET /api/leaderboard
-     Returns an array of users sorted by ranking ASC:
-       [{ name, picture, points, ranking }, ...]
-     Limit to the top N players (e.g., top 100) if the user base grows large.
-
-  3. Ensure the user's current ranking is returned as part of the auth response
-     (POST /api/auth/google response body) and/or via a GET /api/user/me
-     endpoint so the frontend can display it in the profile panel (task 6).
-
+================================================================================
+MERCURY — TODO LIST
 ================================================================================
 
+--------------------------------------------------------------------------------
+BUG 1 — Sign-in error persists after backend recovery (requires page refresh)
+--------------------------------------------------------------------------------
+
+Context:
+  - Auth flow uses a Google OAuth redirect: `AuthService.login()` calls
+    `GoogleSignIn.signIn()`, which redirects the page to Google, then Google
+    redirects back with an `id_token` in `window.location.hash`.
+  - The `AuthService` constructor detects the hash and calls
+    `handleRedirectCallback()`, which POSTs the idToken to `POST /api/auth/google`.
+  - If the backend is down, the POST fails, `loginError$.next('server')` is
+    emitted, and the error banner appears for 4 seconds.
+  - When the user retries, `GoogleSignIn.signIn()` is called again. However, the
+    stale `id_token` is still present in `window.location.hash`. The Capacitor
+    plugin may short-circuit and reuse the old (possibly expired) token instead
+    of starting a fresh OAuth redirect, causing the POST to fail again.
+  - A full page refresh clears the hash, which is why it fixes the issue.
+
+Files to modify:
+  - `frontend/src/app/services/auth.service.ts`
+
+Steps:
+  1. At the END of `handleRedirectCallback()` (in both the `try` and `catch`
+     branches, or in a `finally` block), clear the URL hash so the stale
+     `id_token` is removed:
+       history.replaceState(null, '', window.location.pathname + window.location.search);
+  2. This ensures that when the user retries, `GoogleSignIn.signIn()` initiates
+     a fresh OAuth redirect rather than processing a stale token from the URL.
+
+--------------------------------------------------------------------------------
+BUG 2 — Player info panel shows "Guest player / Not signed in" for authenticated users
+--------------------------------------------------------------------------------
+
+Context:
+  - When hovering or clicking on a player's avatar in the board, the profile
+    panel (`board.component.ts:openProfilePanel`) checks `player?.userId` to
+    determine whether the player is a guest (`isGuest = !player?.userId`).
+  - If `userId` is missing from the `Player` object in the game state, the panel
+    always shows "Guest player — Not signed in".
+  - The root cause: `sendJoinMatchmaking()` in `game-state.service.ts:411` does
+    not include `userId` in the WebSocket message, even though the
+    `JoinMatchmakingMessage` type (defined in `packages/shared/src/types.ts:211`)
+    has a `userId?: string` field.
+  - In `home.page.ts:113-115`, `sendJoinMatchmaking(playerName, playerPicture)`
+    is called but the authenticated user's `id` (`user?.id`) is never passed.
+
+Files to modify:
+  1. `frontend/src/app/game/services/game-state.service.ts`
+     - Add a `userId?: string` parameter to `sendJoinMatchmaking(playerName?, picture?, userId?)`.
+     - Include `userId` in the JSON message sent to the backend:
+         { type: 'joinMatchmaking', playerName, browserId, picture, userId }
+
+  2. `frontend/src/app/home/home.page.ts`
+     - In `openMatchmaking()`, retrieve `user?.id` alongside `user?.name` and
+       `user?.picture`.
+     - Pass it as the third argument:
+         this.gameStateService.sendJoinMatchmaking(playerName, playerPicture, user?.id);
+
+  Note: Verify that the backend's matchmaking handler (`session-manager.ts` or
+  `matchmaking-manager.ts`) correctly reads `userId` from `JoinMatchmakingMessage`
+  and passes it into the `PlayerConfig`, so it ends up in the `Player` object
+  broadcast in the game state.
+
+--------------------------------------------------------------------------------
+FEATURE 3 — Profile editing in the login modal (name + profile picture)
+--------------------------------------------------------------------------------
+
+Context:
+  - When a user is signed in, the login modal (`home.page.html:135-143`) shows
+    their avatar, name, stats, and a logout button — but no way to edit their
+    profile.
+  - The `UserDoc` in Cosmos DB (managed by `backend/src/auth/auth-router.ts`)
+    stores `name` and `picture` fields that currently only come from Google at
+    first login.
+  - A new `PATCH /api/auth/user/:id` backend endpoint and new frontend editing
+    UI are required.
+
+Sub-tasks:
+
+  A. Backend — Add PATCH /api/auth/user/:id endpoint
+     File: `backend/src/auth/auth-router.ts`
+
+     - Add a `PATCH /api/auth/user/:id` route.
+     - The request body accepts: `{ name?: string, picture?: string }`.
+     - Validate `name`:
+         - Must be between 1 and 30 characters.
+         - Allowed characters: letters (unicode), digits, spaces, hyphens,
+           underscores, apostrophes. Reject anything else (especially `<`, `>`,
+           `"`, `&`, backticks, etc.) to prevent XSS/injection.
+     - Validate `picture` (if provided):
+         - Accept only a base64-encoded data URL with MIME type `image/jpeg`,
+           `image/png`, or `image/webp`.
+         - Reject data URLs that exceed 2 MB of raw base64 content.
+         - Reject any non-data-URL value (external URLs are not accepted).
+     - If validation passes, update the `name` and/or `picture` fields of the
+       `UserDoc` in Cosmos DB (use `container.item(id, id).replace(...)`).
+     - Return the updated user object (same shape as `POST /api/auth/google`
+       response: `{ id, email, name, picture, points, ranking, createdAt }`).
+
+  B. Frontend — Add update method to AuthService
+     File: `frontend/src/app/services/auth.service.ts`
+
+     - Add a method `updateProfile(name: string, picture: string): Promise<void>`.
+     - It sends `PATCH ${environment.apiUrl}/api/auth/user/${user.id}` with
+       `{ name, picture }`.
+     - On success, update `user$.next(updatedUser)` and overwrite
+       `localStorage` (same key `auth_user`).
+     - Expose an `updateError$` Subject<string> to surface validation errors.
+
+  C. Frontend — Add editing UI in the login modal
+     Files: `frontend/src/app/home/home.page.html`,
+             `frontend/src/app/home/home.page.ts`
+
+     - In the authenticated section of the modal (the `*ngIf="auth.user$ | async as user"` block),
+       add an "Edit profile" toggle button next to the logout button.
+     - When toggled, show an edit form containing:
+         1. A text input for the display name (pre-filled with `user.name`),
+            with a maxlength of 30 and a pattern or validation feedback.
+         2. A file input for the profile picture, accepting only
+            `image/jpeg,image/png,image/webp` and limited to 2 MB client-side.
+            Show a preview of the selected image before saving.
+         3. A "Save" button (disabled while saving).
+         4. An error message area if validation or the API call fails.
+     - In `home.page.ts`:
+         - When the user selects a file, read it with `FileReader.readAsDataURL()`,
+           validate the MIME type and file size client-side before sending.
+         - Reject images where either dimension exceeds 512 px (use an
+           `<img>` drawn onto an `OffscreenCanvas` to check dimensions).
+         - On "Save", call `auth.updateProfile(name, base64DataUrl)` and close
+           the edit form on success.
+
+--------------------------------------------------------------------------------
+FEATURE 4 — Leaderboard page (new frontend route)
+--------------------------------------------------------------------------------
+
+Context:
+  - The backend already exposes `GET /api/auth/leaderboard`, which returns an
+    array of the top 100 users sorted by points descending:
+      `[{ name, picture, points, ranking }, ...]`
+  - There is no frontend page for this yet.
+  - The leaderboard should be reachable from the player info panel that appears
+    when hovering/clicking on a player's avatar in the board.
+
+Sub-tasks:
+
+  A. Create the LeaderboardPage component
+     Files to create:
+       `frontend/src/app/leaderboard/leaderboard.page.ts`
+       `frontend/src/app/leaderboard/leaderboard.page.html`
+       `frontend/src/app/leaderboard/leaderboard.page.scss`
+
+     - Standalone Angular component.
+     - On init, call `GET ${environment.apiUrl}/api/auth/leaderboard` via
+       `HttpClient` and store the result in a signal.
+     - Display a ranked list. For each entry show:
+         - Rank number (1-based, derived from array index).
+         - Profile picture (`<img>` with `referrerpolicy="no-referrer"`).
+         - Display name.
+         - Points.
+     - Show a loading indicator while the request is in flight.
+     - Show an error message if the request fails.
+     - Include a back-navigation button (e.g., `<ion-back-button>` or a plain
+       button calling `Location.back()`) so the user can return to the previous page.
+
+  B. Register the route
+     File: `frontend/src/app/app.routes.ts`
+
+     - Add a lazy-loaded route:
+         { path: 'leaderboard', loadComponent: () => import('./leaderboard/leaderboard.page').then(m => m.LeaderboardPage) }
+
+  C. Add a "Leaderboard" link in the profile panel
+     Files: `frontend/src/app/game/components/board/board.component.html`,
+             `frontend/src/app/game/components/board/board.component.ts`
+
+     - In the profile panel HTML, in the authenticated player section (where
+       `ProfileData` is shown: name, points, ranking, member since), add a
+       "View leaderboard" link or button.
+     - This link should navigate to `/leaderboard` using Angular Router
+       (`routerLink="/leaderboard"` or `router.navigate(['/leaderboard'])`).
+     - The link should appear for authenticated players only (i.e., when
+       `!panel.isGuest`), not for guests.
+     - Inject `Router` into `BoardComponent` if not already present.

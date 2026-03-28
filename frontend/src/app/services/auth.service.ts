@@ -62,6 +62,7 @@ export class AuthService {
             this.loginError$.next(isServerError ? 'server' : 'google');
         } finally {
             this.isLoading$.next(false);
+            history.replaceState(null, '', window.location.pathname + window.location.search);
         }
     }
 

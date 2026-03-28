@@ -110,8 +110,9 @@ export class HomePage implements OnInit, OnDestroy {
     const user = this.auth.user$.getValue();
     const playerName = user?.name ?? generateGuestName();
     const playerPicture = user?.picture;
+    const userId = user?.id;
     this.gameStateService.connect(environment.wsUrl, () => {
-      this.gameStateService.sendJoinMatchmaking(playerName, playerPicture);
+      this.gameStateService.sendJoinMatchmaking(playerName, playerPicture, userId);
     });
 
     this.matchmakingSub = this.gameStateService.matchmakingStatus$.subscribe(status => {
