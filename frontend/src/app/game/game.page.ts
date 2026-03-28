@@ -2,6 +2,7 @@ import { Component, signal, computed, effect, OnDestroy, ViewChild, AfterViewIni
 import { BoardComponent } from './components/board/board.component';
 import { TableComponent } from './components/table/table.component';
 import { VictoryOverlayComponent } from './components/victory-overlay/victory-overlay.component';
+import { GameRulesModalComponent } from '../shared/game-rules-modal.component';
 import { GameStateService } from './services/game-state.service';
 import { SoundService } from './services/sound.service';
 import { environment } from '../../environments/environment';
@@ -12,13 +13,14 @@ import { NEW_TURN_BANNER_DURATION_MS, GameConfig } from '@mercury/shared';
   selector: 'app-game',
   templateUrl: 'game.page.html',
   styleUrl: 'game.page.scss',
-  imports: [BoardComponent, TableComponent, VictoryOverlayComponent],
+  imports: [BoardComponent, TableComponent, VictoryOverlayComponent, GameRulesModalComponent],
 })
 export class GamePage implements OnDestroy, AfterViewInit {
 
   @ViewChild(BoardComponent) private boardRef?: BoardComponent;
 
   showNewTurnBanner = signal(false);
+  showRules = signal(false);
   newTurnColor = signal<string>('');
   newTurnName = signal<string>('');
 

@@ -7,7 +7,9 @@ import {
   computed,
   effect,
   OnInit,
-  OnDestroy
+  OnDestroy,
+  Output,
+  EventEmitter
 } from '@angular/core';
 import { TockCardComponent } from 'src/app/shared/tock-card.component';
 import type { Card, MarbleColor } from '@mercury/shared';
@@ -132,6 +134,8 @@ enum TURN_PHASE {
       return { step: dot, enabled, group, isActive: currentSplit === dot };
     });
   });
+
+  @Output() rulesRequested = new EventEmitter<void>();
 
   /** Vrai quand le dialogue de confirmation d'abandon est affiché. */
   showResignConfirm = signal(false);

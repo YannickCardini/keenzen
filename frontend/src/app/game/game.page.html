@@ -73,7 +73,7 @@
     </div>
     <div class="table-wrapper" [style.height.px]="gameStateService.boardContainerSize()"
       [style.width.px]="gameStateService.boardContainerSize()">
-      <app-table></app-table>
+      <app-table (rulesRequested)="showRules.set(true)"></app-table>
     </div>
   </div>
   }
@@ -81,6 +81,8 @@
   <!-- ═══════════════════════════════════════════════════════════
        ÉCRAN DE VICTOIRE
        ═══════════════════════════════════════════════════════════ -->
+  <app-game-rules-modal [show]="showRules()" (closeModal)="showRules.set(false)"></app-game-rules-modal>
+
   @if (gameStateService.winner(); as winnerColor) {
   <app-victory-overlay
     [color]="winnerColor"

@@ -2,6 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { GameRulesModalComponent } from '../shared/game-rules-modal.component';
 import { Subscription, take } from 'rxjs';
 import { version } from '../../../../package.json';
 import { GameStateService } from '../game/services/game-state.service';
@@ -15,7 +16,7 @@ import { generateGuestName } from '../shared/guest-name';
   selector: 'app-home',
   templateUrl: './home.page.html',
   styleUrls: ['./home.page.scss'],
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, GameRulesModalComponent],
 })
 export class HomePage implements OnInit, OnDestroy {
   readonly titleLetters = ['M', 'E', 'R', 'C', 'U', 'R', 'Y'];
@@ -170,6 +171,7 @@ export class HomePage implements OnInit, OnDestroy {
 
   openRules() { this.showRules = true; }
   closeRules() { this.showRules = false; }
+  goToLeaderboard() { this.router.navigate(['/leaderboard']); }
 
   // ── Matchmaking ────────────────────────────────────────────────────────────
 
