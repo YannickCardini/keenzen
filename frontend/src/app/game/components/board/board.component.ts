@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, OnDestroy, signal, computed, effect, inject } from '@angular/core';
+import { Component, HostListener, OnInit, OnDestroy, signal, computed, effect, inject, ViewChild, ElementRef } from '@angular/core';
 import { GameStateService } from '../../services/game-state.service';
 import { SoundService } from '../../services/sound.service';
 import { IonCol, IonGrid, IonRow } from '@ionic/angular/standalone';
@@ -8,6 +8,7 @@ import { Subscription, firstValueFrom } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { environment } from 'src/environments/environment';
+import { Capacitor } from '@capacitor/core';
 
 import {
   MarbleColor,
@@ -76,6 +77,7 @@ export interface SquareAnimation {
 export class BoardComponent implements OnInit, OnDestroy {
 
   // ── Config plateau ──────────────────────────────────────────────────────────
+  readonly isWeb = !Capacitor.isNativePlatform();
   readonly gridSize = GRID_SIZE;
   readonly homes = HOME_POSITIONS;
   readonly arrivals = ARRIVAL_POSITIONS;
@@ -180,6 +182,7 @@ export class BoardComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   readonly isHoverDevice = window.matchMedia('(hover: hover)').matches;
   profilePanel = signal<ProfilePanelState | null>(null);
+  @ViewChild('profilePanelEl') profilePanelEl?: ElementRef<HTMLElement>;
   private panelCloseTimer?: ReturnType<typeof setTimeout>;
 
   // ── Timers internes ─────────────────────────────────────────────────────────
@@ -192,6 +195,30 @@ export class BoardComponent implements OnInit, OnDestroy {
 
     effect(() => {
       this.displayedGameData.set(this.gameStateService.data());
+    });
+
+    // Re-clamp the profile panel position after each render, using the panel's
+    // actual DOM dimensions instead of the conservative PANEL_H estimate.
+    effect(() => {
+      const panel = this.profilePanel();
+      if (!panel) return;
+      setTimeout(() => {
+        const el = this.profilePanelEl?.nativeElement;
+        if (!el) return;
+        const h = el.offsetHeight;
+        const w = el.offsetWidth;
+        const current = this.profilePanel();
+        if (!current || current.color !== panel.color) return;
+        let { x, y } = current;
+        const origX = x, origY = y;
+        if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+        if (y < 8) y = 8;
+        if (x + w > window.innerWidth - 8) x = window.innerWidth - w - 8;
+        if (x < 8) x = 8;
+        if (x !== origX || y !== origY) {
+          this.profilePanel.set({ ...current, x, y });
+        }
+      }, 0);
     });
 
     this.actionPlayedSub = this.gameStateService.actionPlayed$.subscribe((action: Action) => {
@@ -866,6 +893,9 @@ export class BoardComponent implements OnInit, OnDestroy {
   }
 
   goToLeaderboard(): void {
-    this.router.navigate(['/leaderboard']);
+    const url = this.router.serializeUrl(
+      this.router.createUrlTree(['/leaderboard'])
+    );
+    window.open(url, '_blank');
   }
 }

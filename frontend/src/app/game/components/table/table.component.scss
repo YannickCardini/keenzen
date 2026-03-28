@@ -434,13 +434,22 @@
 }
 
 /* =========================================
-   RESIGN BUTTON — top-right floating
+   ACTION MENU — top-right floating
    ========================================= */
-.rules-btn {
+.action-menu {
     position: absolute;
     top: 0.75rem;
-    left: 0.75rem;
+    right: 0.75rem;
     z-index: 30;
+}
+
+.menu-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: 28;
+}
+
+.menu-trigger {
     width: 32px;
     height: 32px;
     border-radius: 8px;
@@ -454,10 +463,11 @@
     transition: all 0.2s ease;
     backdrop-filter: blur(8px);
 
-    &:hover {
-        background: rgba(59, 130, 246, 0.12);
-        border-color: rgba(59, 130, 246, 0.3);
-        color: #3b82f6;
+    &:hover,
+    &.is-open {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.18);
+        color: rgba(255, 255, 255, 0.8);
     }
 
     &:active {
@@ -465,32 +475,99 @@
     }
 }
 
-.resign-btn {
+.menu-dropdown {
     position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
-    z-index: 30;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 29;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: rgba(15, 23, 42, 0.96);
+    backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-muted);
-    cursor: pointer;
+    border-radius: 10px;
+    padding: 4px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    min-width: 140px;
+    animation: menuFadeIn 0.15s ease;
+}
+
+@keyframes menuFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.menu-item {
     display: flex;
     align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-    backdrop-filter: blur(8px);
+    gap: 8px;
+    width: 100%;
+    padding: 7px 10px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s ease;
+
+    svg {
+        flex-shrink: 0;
+        opacity: 0.8;
+    }
 
     &:hover {
-        background: rgba(248, 113, 113, 0.12);
-        border-color: rgba(248, 113, 113, 0.3);
-        color: var(--danger);
+        background: rgba(255, 255, 255, 0.07);
+        color: white;
+
+        svg {
+            opacity: 1;
+        }
     }
 
     &:active {
-        transform: scale(0.92);
+        transform: scale(0.97);
+    }
+
+    &--danger {
+        color: rgba(248, 113, 113, 0.7);
+
+        svg {
+            opacity: 0.7;
+        }
+
+        &:hover {
+            background: rgba(248, 113, 113, 0.12);
+            color: var(--danger);
+
+            svg {
+                opacity: 1;
+            }
+        }
+    }
+
+    &--muted {
+        color: rgba(251, 191, 36, 0.8);
+
+        svg {
+            opacity: 0.8;
+        }
+
+        &:hover {
+            background: rgba(251, 191, 36, 0.08);
+            color: var(--gold);
+        }
     }
 }
 

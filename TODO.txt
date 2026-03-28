@@ -1,71 +1,16 @@
-## TODO — Mercury
+Regrouper le bouton mute/unmute avec le bouton resign et game rules dans un sous-menu dans le table.component
 
----
+**Contexte:**
+- Le `SoundService` est dans `frontend/src/app/game/services/sound.service.ts`. Il n'a actuellement pas d'état mute — toutes les méthodes `play*()` synthétisent ou jouent l'audio sans condition.
+- Le `table.component.html` possède déjà un bouton resign (`.resign-btn`, un bouton icône SVG) et un bouton game rules, définis dans `frontend/src/app/game/components/table/table.component.html`.
+- Tous les sons du jeu passent par `SoundService`, injecté dans `board.component.ts` et `table.component.ts`.
 
-### 1. Redesign game rules display & replace the "Game Rules" button with a "Leaderboard" button
-
-**Context:**
-- The game rules modal (`rules-card`) is defined in `frontend/src/app/home/home.page.html` (the `showRules` overlay, lines ~347–482).
-- It is currently only triggered from the "Game Rules" button (`rules-btn`) in the home page hero action buttons (`frontend/src/app/home/home.page.html`, lines ~92–99), via `openRules()` in `home.page.ts`.
-- The settings/info modal (`showSettings`) is accessible from the footer gear icon and currently only shows version/contact info.
-- The `table.component` (`frontend/src/app/game/components/table/table.component.html`) has no access to the game rules during a game session.
-- The leaderboard page exists at `/leaderboard` (`frontend/src/app/leaderboard/`).
-
-**Tasks:**
-1. Replace the "Game Rules" button (`.rules-btn`) in the home page hero action buttons with a "Leaderboard" button that navigates to the `/leaderboard` route using Angular Router.
-2. Add a "Game Rules" link or button inside the settings/info modal (`showSettings` overlay in `home.page.html`) 
-so rules remain accessible from the home page without a dedicated hero button.
-3. Add a way to open the game rules from within the game — add a rules trigger button or link inside `table.component.html` (e.g., near the resign button or in the control dashboard area). This requires:
-   - Either extracting the rules content into a shared component (e.g., `GameRulesModalComponent`) usable in both `home.page` and `game.page` / `table.component`.
-   - Or emitting an event from `table.component` to `game.page` to show the rules modal.
-4. Redesign the visual appearance of the game rules modal (`rules-card` and its inner elements) to be more polished and consistent with the rest of the UI.
-
----
-
-### 2. Show points-loss warning in the resign confirmation dialog (authenticated players only)
-
-**Context:**
-- The resign confirmation dialog is inside `frontend/src/app/game/components/table/table.component.html` (the `resign-overlay` / `resign-dialog` block, lines ~151–163).
-- It currently displays: "Abandon the game?" and "You will not be able to rejoin this game."
-- The player's authentication state is accessible via `AuthService` (`frontend/src/app/services/auth.service.ts`), which exposes `user$` (an Observable of the logged-in user or `null`).
-- `GameStateService` provides `myPlayerColor()` signal. Cross-referencing with the game state players list allows determining if the current player has a `userId` (i.e., is authenticated).
-- Losing a game causes the backend to deduct points from the authenticated user's score (see `backend/src/game/game.ts`).
-
-**Tasks:**
-1. In `table.component.ts`, inject `AuthService` and read the current authenticated user.
-2. In the resign dialog (`resign-dialog`), conditionally show an additional warning line when the user is authenticated (i.e., `auth.user$ | async` is non-null). The warning should say something like: *"As a registered player, resigning will cost you points."*
-3. The warning must be hidden for guest players (unauthenticated users).
-
----
-
-### 3. Fix player info panel overflow out of the viewport / board bounds
-
-**Context:**
-- The profile panel is rendered as a `position: fixed` element in `frontend/src/app/game/components/board/board.component.html` (lines ~127–175) and styled in `board.component.scss` (`.profile-panel`, lines ~1272+).
-- Its position is calculated in `openProfilePanel()` inside `board.component.ts` (lines ~822–853).
-- The current logic uses `PANEL_W = 224` and `PANEL_H = 200` as estimated panel dimensions to clamp `x` and `y` within the viewport.
-- The actual panel height can exceed 200px when profile data is loaded (it includes photo, name, rank, points, member-since date, and a leaderboard button), causing the bottom of the panel to overflow below the viewport or behind the board.
-- For players whose avatars are positioned near the edge of the screen (e.g., the green player in the top-right corner of the board), the panel can overflow the visible area.
-
-**Tasks:**
-1. In `openProfilePanel()` in `board.component.ts`, increase `PANEL_H` to better reflect the real panel height (approx. 260–280px based on its content), **or** implement a post-render clamp: after the panel is first rendered, read its actual `offsetHeight` via a `ViewChild` or `ElementRef` and re-clamp `y` if necessary.
-2. Ensure the panel never overflows on any side (top, bottom, left, right) for all four player positions. Test especially for the green player (top-right of board) and the orange player.
-3. Optionally, adjust the preferred panel opening direction per player position (e.g., open downward instead of rightward for top-edge players) to avoid the panel visually colliding with the board.
-
----
-
-### 4. Add a mute/unmute sound button inside the table component
-
-**Context:**
-- The `SoundService` is at `frontend/src/app/game/services/sound.service.ts`. It currently has no mute state — all `play*()` methods synthesize or play audio unconditionally.
-- The `table.component.html` has a resign button (`.resign-btn`, an SVG icon button at the top-right corner) defined in `frontend/src/app/game/components/table/table.component.html` (lines ~23–31).
-- All game sounds are played through `SoundService`, injected in both `board.component.ts` and `table.component.ts`.
-
-**Tasks:**
-1. Add a `muted` boolean signal (defaulting to `false`) to `SoundService`. At the start of every `play*()` method, return early if `muted` is `true`.
-2. Add a public `toggleMute()` method (or `setMuted(value: boolean)`) to `SoundService`.
-3. In `table.component.html`, add a mute/unmute icon button at the top-left of the `.game-board` container, visually mirroring the resign button style (icon-only, same size and visual weight as `.resign-btn`).
-   - Use a speaker-on SVG icon when sound is enabled, and a speaker-off (muted) SVG icon when muted.
-   - The button should call `soundService.toggleMute()` on click.
-4. The mute state should survive for the duration of the game session (it does not need to persist across page reloads, but storing it in `localStorage` is a bonus).
-5. Assess visual harmony with the resign button: both buttons should be consistent in shape, size, and position (resign top-right, mute top-left).
+**Tâches:**
+1. Ajouter un signal `muted` (boolean, défaut `false`) dans `SoundService`. Au début de chaque méthode `play*()`, retourner immédiatement si `muted` vaut `true`.
+2. Ajouter une méthode publique `toggleMute()` dans `SoundService`.
+3. Créer un sous-menu dans `table.component.html` regroupant les trois actions :
+   - Bouton mute/unmute (icône speaker-on / speaker-off selon l'état) — appelle `soundService.toggleMute()` au clic.
+   - Bouton resign (déjà existant, à déplacer dans le sous-menu).
+   - Bouton game rules (déjà existant, à déplacer dans le sous-menu).
+4. Le sous-menu doit être cohérent visuellement (même style d'icônes, même taille et poids visuel que les boutons existants).
+5. L'état mute n'a pas besoin de persister entre les rechargements de page (bonus : le stocker dans `localStorage`).

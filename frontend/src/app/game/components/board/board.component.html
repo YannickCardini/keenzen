@@ -122,13 +122,16 @@
   </div>
   }
 </div>
+</div>
 
 <!-- Profile panel (backdrop + panel, fixed to viewport) -->
+<!-- NOTE: must remain OUTSIDE .board-container — backdrop-filter on that element
+     would make position:fixed children position relative to it, not the viewport. -->
 @if (profilePanel(); as panel) {
   @if (!isHoverDevice) {
     <div class="profile-backdrop" (click)="closeProfilePanel()"></div>
   }
-  <div class="profile-panel"
+  <div #profilePanelEl class="profile-panel"
     [style.left.px]="panel.x"
     [style.top.px]="panel.y"
     [ngClass]="'profile-panel--' + panel.color"
@@ -167,10 +170,11 @@
         </div>
       </div>
       <div class="profile-panel__since">{{ computeMemberSince(data.createdAt) }}</div>
-      <button class="profile-panel__leaderboard-btn" (click)="goToLeaderboard()">View leaderboard</button>
+      @if (isWeb) {
+        <button class="profile-panel__leaderboard-btn" (click)="goToLeaderboard()">View leaderboard</button>
+      }
     } @else {
       <div class="profile-panel__error">Could not load profile</div>
     }
   </div>
 }
-</div>

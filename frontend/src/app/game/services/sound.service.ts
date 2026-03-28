@@ -1,10 +1,17 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 
 @Injectable({ providedIn: 'root' })
 export class SoundService {
 
   private ctx: AudioContext | null = null;
   private buffers = new Map<string, AudioBuffer>();
+
+  readonly muted = signal<boolean>(localStorage.getItem('mercury-muted') === 'true');
+
+  toggleMute(): void {
+    this.muted.set(!this.muted());
+    localStorage.setItem('mercury-muted', String(this.muted()));
+  }
 
   constructor() {
     this.preloadAssets();
@@ -58,6 +65,7 @@ export class SoundService {
 
   /** Short, low thud — heavy marble rolling. */
   playMove(): void {
+    if (this.muted()) return;
     const ctx = this.getCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -77,6 +85,7 @@ export class SoundService {
 
   /** Percussive "tok" — marble dropping onto the board. */
   playEnter(): void {
+    if (this.muted()) return;
     const ctx = this.getCtx();
     const t = ctx.currentTime;
 
@@ -108,6 +117,7 @@ export class SoundService {
 
   /** Sharp impact — marble knocked off the board. */
   playCapture(): void {
+    if (this.muted()) return;
     if (this.playBuffer('capture')) return;
 
     const ctx = this.getCtx();
@@ -157,6 +167,7 @@ export class SoundService {
 
   /** Double-hit whoosh — two marbles swapping places. */
   playSwap(): void {
+    if (this.muted()) return;
     if (this.playBuffer('teleport')) return;
 
     const ctx = this.getCtx();
@@ -182,6 +193,7 @@ export class SoundService {
 
   /** Soft ascending chime — marble reaching the finish zone. */
   playPromote(): void {
+    if (this.muted()) return;
     const ctx = this.getCtx();
     const t = ctx.currentTime;
 
@@ -204,6 +216,7 @@ export class SoundService {
 
   /** Paper whoosh — card played/thrown onto the discard pile. */
   playCard(): void {
+    if (this.muted()) return;
     if (this.playBuffer('card')) return;
 
     const ctx = this.getCtx();
@@ -239,6 +252,7 @@ export class SoundService {
 
   /** Subtle card-swipe tick — discard or pass. */
   playDiscard(): void {
+    if (this.muted()) return;
     const ctx = this.getCtx();
     const t = ctx.currentTime;
 
@@ -257,6 +271,7 @@ export class SoundService {
 
   /** Soft single bell — new turn notification. */
   playNewTurn(): void {
+    if (this.muted()) return;
     if (this.playBuffer('new_turn')) return;
 
     const ctx = this.getCtx();
@@ -291,6 +306,7 @@ export class SoundService {
 
   /** Triumphant fanfare — human player wins. */
   playVictory(): void {
+    if (this.muted()) return;
     if (this.playBuffer('victory')) return;
 
     const ctx = this.getCtx();
@@ -316,6 +332,7 @@ export class SoundService {
 
   /** Stressful countdown tick — last 5 seconds warning. Pitch rises as time runs out. */
   playCountdownTick(secondsLeft: number): void {
+    if (this.muted()) return;
     const ctx = this.getCtx();
     const t = ctx.currentTime;
 
@@ -351,6 +368,7 @@ export class SoundService {
 
   /** Urgent descending buzzer — time is up, AI will play instead. */
   playTimeUp(): void {
+    if (this.muted()) return;
     const ctx = this.getCtx();
     const t = ctx.currentTime;
 
@@ -374,6 +392,7 @@ export class SoundService {
 
   /** Low descending tone — human player loses. */
   playDefeat(): void {
+    if (this.muted()) return;
     if (this.playBuffer('defeat')) return;
 
     const ctx = this.getCtx();

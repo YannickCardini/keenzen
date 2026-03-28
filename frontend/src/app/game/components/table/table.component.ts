@@ -141,6 +141,9 @@ enum TURN_PHASE {
   /** Vrai quand le dialogue de confirmation d'abandon est affiché. */
   showResignConfirm = signal(false);
 
+  /** Vrai quand le sous-menu d'actions est ouvert. */
+  showMenu = signal(false);
+
   /** Bannière "temps écoulé" : couleur du joueur concerné, null = masqué */
   timeoutBannerColor = signal<MarbleColor | null>(null);
   /** Bannière "joueur déconnecté" : couleur du joueur auto-joué, null = masqué */
@@ -186,7 +189,7 @@ enum TURN_PHASE {
     return timer > 0 ? this.timeLeft() / timer : 0;
   });
 
-  constructor(protected gameStateService: GameStateService, private soundService: SoundService, private router: Router, protected authService: AuthService) {
+  constructor(protected gameStateService: GameStateService, protected soundService: SoundService, private router: Router, protected authService: AuthService) {
     // Clear the flying card once the server updates the hand
     effect(() => {
       this.gameStateService.data()?.gameState.hand;
