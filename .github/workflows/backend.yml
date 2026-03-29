@@ -34,23 +34,29 @@ jobs:
       - name: Build backend
         run: npm run build --workspace=backend
 
-      # Crée un package de déploiement minimal pour Azure :
+      # Crée un package de déploiement autonome pour Azure (ZIP deploy ne lance pas npm install) :
       # - dist/              : code backend compilé
-      # - node_modules/@mercury/shared : pré-résolu pour éviter les problèmes de workspaces
-      # - package.json       : basé sur backend, sans @mercury/shared (déjà placé), avec start script
-      #
-      # Azure Oryx lancera ensuite `npm install` (pour express, cors, ws, etc.) puis `npm start`
+      # - node_modules/      : toutes les dépendances de prod installées en CI
+      # - package.json       : basé sur backend, sans @mercury/shared (placé manuellement)
       - name: Prepare deployment package
         run: |
-          mkdir -p deploy/node_modules/@mercury/shared
+          mkdir -p deploy
 
+          # Code compilé du backend
           cp -r backend/dist deploy/dist
 
-          cp -r packages/shared/dist deploy/node_modules/@mercury/shared/dist
-          cp packages/shared/package.json deploy/node_modules/@mercury/shared/package.json
-
+          # package.json de prod : supprime @mercury/shared (workspace) + ajoute start script
           jq 'del(.dependencies["@mercury/shared"]) | .scripts = {"start": "node dist/index.js"}' \
             backend/package.json > deploy/package.json
+
+          # Installe les dépendances de prod directement dans deploy/
+          # (dotenv, express, cors, ws, @azure/cosmos, etc.)
+          cd deploy && npm install --omit=dev && cd ..
+
+          # Place @mercury/shared compilé manuellement (package workspace, absent du registry)
+          mkdir -p deploy/node_modules/@mercury/shared
+          cp -r packages/shared/dist deploy/node_modules/@mercury/shared/dist
+          cp packages/shared/package.json deploy/node_modules/@mercury/shared/package.json
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
