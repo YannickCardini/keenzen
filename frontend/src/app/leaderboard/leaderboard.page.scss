@@ -16,11 +16,13 @@ $bg-mid: #1a2840;
 .lb-wrap {
   width: 100%;
   min-height: 100%;
+  box-sizing: border-box;
   background: radial-gradient(ellipse at 50% 30%, $bg-mid 0%, $bg-dark 80%);
   display: flex;
   justify-content: center;
   align-items: flex-start;
   padding: 32px 16px 48px;
+  overflow-y: auto;
 }
 
 .lb-card {
@@ -162,4 +164,84 @@ $bg-mid: #1a2840;
   font-weight: 600;
   color: $c-gold;
   flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .lb-wrap {
+    padding: 16px 8px 32px;
+    align-items: flex-start;
+  }
+
+  .lb-header {
+    padding: 14px 14px 12px;
+    gap: 8px;
+  }
+
+  .lb-title {
+    font-size: 17px;
+  }
+
+  .lb-back {
+    font-size: 13px;
+    padding: 5px 8px;
+  }
+
+  .lb-row {
+    padding: 8px 14px;
+    gap: 10px;
+  }
+
+  .lb-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .lb-name {
+    font-size: 13px;
+  }
+
+  .lb-points {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .lb-wrap {
+    padding: 8px 4px 24px;
+  }
+
+  .lb-header {
+    padding: 10px 10px 10px;
+  }
+
+  .lb-title {
+    font-size: 15px;
+  }
+
+  .lb-row {
+    padding: 7px 10px;
+    gap: 8px;
+  }
+
+  .lb-rank {
+    width: 22px;
+    font-size: 13px;
+
+    &--gold   { font-size: 15px; }
+    &--silver { font-size: 14px; }
+    &--bronze { font-size: 14px; }
+  }
+
+  .lb-avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .lb-name {
+    font-size: 12px;
+  }
+
+  .lb-points {
+    font-size: 11px;
+  }
 }
