@@ -1,16 +1,98 @@
-Regrouper le bouton mute/unmute avec le bouton resign et game rules dans un sous-menu dans le table.component
+## BUG: Timer decrements faster and sounds double after resign + replay
 
-**Contexte:**
-- Le `SoundService` est dans `frontend/src/app/game/services/sound.service.ts`. Il n'a actuellement pas d'état mute — toutes les méthodes `play*()` synthétisent ou jouent l'audio sans condition.
-- Le `table.component.html` possède déjà un bouton resign (`.resign-btn`, un bouton icône SVG) et un bouton game rules, définis dans `frontend/src/app/game/components/table/table.component.html`.
-- Tous les sons du jeu passent par `SoundService`, injecté dans `board.component.ts` et `table.component.ts`.
+**File**: `frontend/src/app/game/components/table/table.component.ts`
 
-**Tâches:**
-1. Ajouter un signal `muted` (boolean, défaut `false`) dans `SoundService`. Au début de chaque méthode `play*()`, retourner immédiatement si `muted` vaut `true`.
-2. Ajouter une méthode publique `toggleMute()` dans `SoundService`.
-3. Créer un sous-menu dans `table.component.html` regroupant les trois actions :
-   - Bouton mute/unmute (icône speaker-on / speaker-off selon l'état) — appelle `soundService.toggleMute()` au clic.
-   - Bouton resign (déjà existant, à déplacer dans le sous-menu).
-   - Bouton game rules (déjà existant, à déplacer dans le sous-menu).
-4. Le sous-menu doit être cohérent visuellement (même style d'icônes, même taille et poids visuel que les boutons existants).
-5. L'état mute n'a pas besoin de persister entre les rechargements de page (bonus : le stocker dans `localStorage`).
+**Symptom**: After resigning and starting a new game, the turn timer decrements by 2 seconds per
+second (instead of 1), and the countdown sound plays twice. After a second resign + restart, it
+decrements by 3 per second. The effective turn duration shrinks with each game restart.
+
+**Root cause**: In `ngOnInit()`, a subscription to `gameStateService.newTurn` is created to call
+`startTimer()` on each new turn. This subscription is never unsubscribed in `ngOnDestroy()`.
+When the component is destroyed and recreated on resign + replay, a new subscription is added on
+top of the previous one. After N restarts, N concurrent subscriptions each trigger `startTimer()`,
+creating N overlapping `setInterval` callbacks — which makes the timer fire N times per second and
+plays the countdown sound N times.
+
+**Steps to fix**:
+1. Declare a class field `private newTurnSub?: Subscription;` in `table.component.ts`.
+2. In `ngOnInit()`, assign the subscription: `this.newTurnSub = this.gameStateService.newTurn.subscribe(...)`.
+3. In `ngOnDestroy()`, unsubscribe it: `this.newTurnSub?.unsubscribe();`
+
+Check for any other unmanaged subscriptions in `ngOnInit()` that could similarly accumulate.
+
+---
+
+## BUG: Home page content hidden in landscape mode on mobile (web)
+
+**Files**:
+- `frontend/src/app/home/home.page.scss`
+- `frontend/src/app/home/home.page.html`
+
+**Symptom**: On Chrome for Android, when the home page is viewed in landscape orientation, only the
+floating Mercury logo is visible. The "Play Now" button and other action buttons are not visible and
+cannot be reached by scrolling.
+
+**Root cause**:
+- `.home-wrap` has `overflow: hidden` and uses a vertical flex column layout.
+- `.home-hero` also has `overflow: hidden` with `flex: 1`.
+- In landscape mode, the viewport height drops significantly on mobile, and the flex children exceed
+  the available height. Because overflow is hidden (not scroll), the content below the fold is
+  clipped without any way to scroll to it.
+- There is no landscape-specific media query that adjusts the layout, reduces padding/gaps, or
+  enables scrolling. The only existing landscape rule hides `.home-orbit`, which does not address
+  the overflow problem.
+- The page does not use `<ion-content>`, so no native Ionic scrolling is available.
+
+**Steps to fix** (choose one approach or combine):
+
+**Option A — Enable scrolling in landscape**:
+1. In `home.page.scss`, add a `@media (orientation: landscape)` block that changes `.home-wrap`
+   from `overflow: hidden` to `overflow-y: auto` (or `scroll`).
+2. Adjust `height: 100%` to `min-height: 100%` on `.home-wrap` so the content can expand beyond
+   the viewport.
+
+**Option B — Compact layout in landscape**:
+1. In `home.page.scss`, add a `@media (orientation: landscape) and (max-height: 500px)` block:
+   - Reduce `.home-nav` and `.home-hero` padding.
+   - Reduce `gap` values in `.home-hero` and `.hero-actions`.
+   - Reduce or hide the hero title letter animations (`hero-title`) to save vertical space.
+   - Set `flex-direction: row` on `.home-hero` to place content side by side.
+2. Make sure all action buttons remain in the visible viewport without needing to scroll.
+
+---
+
+## BUG: `android.yaml` CI workflow fails to build — missing monorepo steps
+
+**File**: `.github/workflows/android.yaml`
+
+**Symptom**: The Android CI workflow fails to build the Angular frontend because the `@mercury/shared`
+package has not been compiled before the frontend build runs. The workflow was created before the
+monorepo structure (with `packages/shared`) was introduced, and it still installs dependencies as if
+the project is a standalone frontend app.
+
+**Root cause**:
+1. The workflow runs `cd frontend && npm install` instead of running `npm install` at the repo root.
+   This bypasses npm workspace linking and does not install the `packages/shared` dependency properly.
+2. There is no step to build `@mercury/shared` (i.e., `npm run build --workspace=packages/shared`)
+   before building the frontend. The frontend imports from `@mercury/shared`'s compiled `dist/`
+   folder, which does not exist until the shared package is built.
+3. The workflow globally installs `@capacitor/cli`, `@capacitor/core`, and `@capacitor/android`,
+   which is unnecessary — these are already listed as local dependencies in `frontend/package.json`.
+4. GitHub Actions versions are outdated (`actions/checkout@v3`, `actions/setup-node@v3`,
+   `actions/setup-java@v3`). The other workflows (`backend.yml`, `frontend.yml`) already use `@v4`.
+
+**Steps to fix**:
+1. Replace `cd frontend && npm install` with a root-level `npm ci` (or `npm install`) so that
+   npm workspaces links `packages/shared` and `apps/frontend` correctly.
+2. Add a build step for the shared package before the frontend build:
+   ```
+   npm run build --workspace=packages/shared
+   ```
+3. Remove the `npm install -g @capacitor/cli @capacitor/core @capacitor/android` line.
+4. Update all `actions/checkout`, `actions/setup-node`, and `actions/setup-java` to `@v4` to match
+   the other workflows in the project.
+5. Verify the resulting workflow produces a valid `.aab` artifact by doing a dry run via
+   `workflow_dispatch`.
+
+Reference the working patterns in `.github/workflows/backend.yml` and
+`.github/workflows/frontend.yml` for how the monorepo build order (shared → app) is handled there.

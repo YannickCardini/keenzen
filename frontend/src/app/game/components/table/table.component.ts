@@ -150,6 +150,7 @@ enum TURN_PHASE {
   autoPlayBannerColor = signal<MarbleColor | null>(null);
   private timeoutBannerTimeout?: ReturnType<typeof setTimeout>;
   private autoPlayBannerTimeout?: ReturnType<typeof setTimeout>;
+  private newTurnSub?: Subscription;
   private timeoutSub?: Subscription;
   private autoPlaySub?: Subscription;
 
@@ -198,7 +199,7 @@ enum TURN_PHASE {
   }
 
   ngOnInit(): void {
-    this.gameStateService.newTurn.subscribe(() => {
+    this.newTurnSub = this.gameStateService.newTurn.subscribe(() => {
       this.startTimer();
       this.updateTurnPhase();
     });
@@ -214,6 +215,7 @@ enum TURN_PHASE {
 
   ngOnDestroy(): void {
     this.clearTimer();
+    this.newTurnSub?.unsubscribe();
     this.timeoutSub?.unsubscribe();
     this.autoPlaySub?.unsubscribe();
     if (this.timeoutBannerTimeout) clearTimeout(this.timeoutBannerTimeout);
