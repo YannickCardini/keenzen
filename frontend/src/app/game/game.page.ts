@@ -8,6 +8,8 @@ import { SoundService } from './services/sound.service';
 import { environment } from '../../environments/environment';
 import { Subscription } from 'rxjs';
 import { NEW_TURN_BANNER_DURATION_MS, GameConfig } from '@mercury/shared';
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Capacitor } from '@capacitor/core';
 
 @Component({
   selector: 'app-game',
@@ -60,8 +62,12 @@ export class GamePage implements OnDestroy, AfterViewInit {
       this.newTurnName.set(player?.name ?? currentTurn);
       if (player?.cardsLeft && player.cardsLeft > 0) {
         this.showNewTurnBanner.set(true);
-        if (this.gameStateService.isMyTurn())
+        if (this.gameStateService.isMyTurn()) {
           this.soundService.playNewTurn();
+          if (Capacitor.isNativePlatform()) {
+            Haptics.impact({ style: ImpactStyle.Medium });
+          }
+        }
       }
 
       if (this.newTurnTimeout) clearTimeout(this.newTurnTimeout);

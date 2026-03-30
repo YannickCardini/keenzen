@@ -1,9 +1,124 @@
-Il devrait etre possible de scroller si l'utilisateur utilise la version mobile (depuis son anvigateur chrome sur telelhpone ou sur la version mobile android/ios) si il se met en position landscape dans la page home, car ca ne permet pas d'afficher tous les bouttons play now/gcustome game/leaderboard. Attention, le css de cette page est tres sensible, ne
-rien casser au comportement actuel, seulement mettre du css pour le cas particulier phone
-(pas de surface ou tablette ou ecran qui se deplie avec grand ecran) dans l'orientation landscape
+# Mercury – TODO
 
-Je ne sais pas trop comment expliquer ce petit bug visuel, mais quand un utilisateur, depuis la version android, clique sur un marble, il y a tres temporairement, l'affiche de la div qui entoure le marble , un div carré de selection qui s'affiche (tres temporairement). Cela n'est pas tres beau.
+---
 
-Il faudrait faire legerement vibré le telephone de l'utilisateur dans la version android lorsque c'est son tour de jouer (quand il a y a le son           this.soundService.playNewTurn(); )
+## 1. Home Page: Enable Vertical Scroll on Mobile Phones in Landscape Orientation
 
-Il faudrait changer l'icon de l'app de Mercury par celle du favicon.svg
+**Files:** `frontend/src/app/home/home.page.scss`
+
+**Problem:**
+On a mobile phone (not a tablet or foldable) rotated to landscape orientation, the home page action
+buttons (Play Now, Custom Game, Leaderboard) are partially or fully hidden below the viewport. There
+is no way to scroll down to reach them.
+
+**Goal:**
+Allow vertical scrolling on the home page only for phones in landscape orientation, so all buttons
+remain accessible. Do not change anything for portrait mode, desktop, or large screens (tablets,
+foldables).
+
+**Constraints:**
+- Only phones are affected (small screen height, e.g. max-height: ~450px).
+- The existing layout must remain completely unchanged in all other cases.
+- The CSS for this page is sensitive — limit changes strictly to the landscape phone media query.
+
+**Steps:**
+1. In `home.page.scss`, add a media query targeting landscape orientation with a small max-height
+   (phone-only), for example:
+   ```scss
+   @media (orientation: landscape) and (max-height: 450px) {
+     // ...
+   }
+   ```
+2. Inside this media query, identify the main content container (the root ion-content or the main
+   wrapper div) and make it vertically scrollable:
+   - Set `overflow-y: auto` (or `scroll`) on that container.
+   - Remove or adjust any `height: 100%` / `min-height: 100vh` constraints that prevent scrolling.
+   - Add bottom padding if needed so the last button is not clipped by the edge of the screen.
+3. Do not modify any style outside this media query.
+4. Test on Chrome DevTools with a phone viewport in landscape mode and on the Android native app.
+
+---
+
+## 2. Android: Remove the Transient Square Highlight When Tapping a Marble
+
+**Files:** `frontend/src/app/game/components/board/board.component.scss`
+
+**Problem:**
+On Android (native app via Capacitor WebView), tapping a marble very briefly shows a square
+selection box around it before it disappears. This is a visual artifact — not a custom animation —
+and should be removed.
+
+**Root Cause:**
+This is caused by the default Android WebView tap highlight (`-webkit-tap-highlight-color`). When a
+touch event fires on a clickable element in a WebView, the browser renders a transient rectangular
+highlight. This is unrelated to the custom `.marble-selected` / `.marble-selectable` styles.
+
+**Goal:**
+Suppress the native WebView tap highlight on marble elements without affecting any custom marble
+selection styling.
+
+**Steps:**
+1. In `board.component.scss`, find the `.marble` base style block.
+2. Add these CSS properties to `.marble`:
+   ```scss
+   -webkit-tap-highlight-color: transparent;
+   user-select: none;
+   -webkit-user-select: none;
+   outline: none;
+   ```
+3. If the square still flashes, also add the same properties to the `.square` parent container (the
+   cell that wraps each marble).
+4. Do not change any of the existing `.marble-selected`, `.marble-selectable`, `.marble-dimmed`, or
+   `.marble-mine` styles.
+5. Verify on Android that the flash is gone and that the custom selection animations still work.
+
+---
+
+## 3. Android: Add Haptic Vibration When It Is the Player's Turn
+
+**Files:**
+- `frontend/package.json`
+- `frontend/src/app/game/game.page.ts` (lines ~61–65, where `soundService.playNewTurn()` is called)
+- `frontend/android/app/src/main/AndroidManifest.xml`
+
+**Problem:**
+When it becomes the player's turn, the app plays a sound (`soundService.playNewTurn()`) but does
+not vibrate. A short haptic feedback at this moment would improve the mobile experience, especially
+when the screen is not visible.
+
+**Goal:**
+Make the Android device vibrate briefly at the same moment the turn notification sound plays.
+This must only trigger on native platforms (not in the web browser).
+
+**Steps:**
+1. Install the Capacitor haptics plugin in the `frontend` workspace:
+   ```bash
+   cd frontend
+   npm install @capacitor/haptics
+   npx cap sync android
+   ```
+2. Confirm that `frontend/android/app/src/main/AndroidManifest.xml` contains the VIBRATE permission
+   (Capacitor adds it automatically during `cap sync`, but verify):
+   ```xml
+   <uses-permission android:name="android.permission.VIBRATE" />
+   ```
+3. In `game.page.ts`, at the block around lines 61–65 where `this.soundService.playNewTurn()` is
+   called, add haptic feedback guarded by a native platform check:
+   ```typescript
+   import { Haptics, ImpactStyle } from '@capacitor/haptics';
+   import { Capacitor } from '@capacitor/core';
+
+   // Existing block (add haptic call right after playNewTurn):
+   if (this.gameStateService.isMyTurn()) {
+     this.soundService.playNewTurn();
+     if (Capacitor.isNativePlatform()) {
+       Haptics.impact({ style: ImpactStyle.Medium });
+     }
+   }
+   ```
+4. Use `ImpactStyle.Medium` as the default intensity. Adjust to `Light` or `Heavy` if needed after
+   testing on a real device.
+5. Run `npx cap sync android` after installing the plugin.
+6. Rebuild the Android app to test (`./gradlew bundleRelease` or trigger the `android.yaml`
+   GitHub Actions workflow).
+

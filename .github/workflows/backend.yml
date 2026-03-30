@@ -4,9 +4,9 @@
 name: Azure Web App - mercury-api 🚀
 
 on:
-  push:
-    branches:
-      - main
+  # push:
+  #   branches:
+  #     - main
   workflow_dispatch:
 
 jobs:

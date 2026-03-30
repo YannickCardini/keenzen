@@ -1631,3 +1631,20 @@ $bg-mid: #1a2840;
     }
   }
 }
+
+// ─── Landscape phone: enable vertical scroll ──────────────────────────────────
+@media (orientation: landscape) and (max-height: 450px) {
+  .home-content {
+    overflow-y: auto;
+    height: auto;
+    min-height: 100%;
+  }
+
+  .home-wrap {
+    position: relative;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    padding-bottom: 24px;
+  }
+}
