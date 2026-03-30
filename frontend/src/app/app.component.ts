@@ -4,6 +4,7 @@ import { take } from 'rxjs';
 import { GameStateService } from './game/services/game-state.service';
 import { TabLockService } from './game/services/tab-lock.service';
 import { environment } from '../environments/environment';
+import { StatusBar } from '@capacitor/status-bar';
 
 @Component({
   selector: 'app-root',
@@ -17,6 +18,8 @@ export class AppComponent implements OnInit {
   private router = inject(Router);
 
   async ngOnInit(): Promise<void> {
+    StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+
     // Handle session replaced by another tab (close code 4001)
     this.gameStateService.sessionReplaced$.subscribe(() => {
       this.router.navigate(['/home']);
