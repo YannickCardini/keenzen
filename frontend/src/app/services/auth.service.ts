@@ -33,6 +33,7 @@ export class AuthService {
         void GoogleSignIn.initialize({
             clientId: environment.googleClientId,
             scopes: ['https://www.googleapis.com/auth/userinfo.profile'],
+            redirectUrl: window.location.origin
         });
 
         // On web, signIn() redirects the page to Google and the promise never resolves.
@@ -48,6 +49,8 @@ export class AuthService {
         console.log('[Auth] login() called, platform:', platform);
         this.isLoading$.next(true);
         try {
+            // // Clear any stale Credential Manager state (fixes GMS code 16 on Android)
+            // try { await GoogleSignIn.signOut(); } catch (_) { }
             console.log('[Auth] Calling GoogleSignIn.signIn()...');
             const result = await GoogleSignIn.signIn();
             console.log('[Auth] GoogleSignIn.signIn() result:', JSON.stringify(result));
