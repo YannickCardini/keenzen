@@ -14,6 +14,7 @@ import {
     TURN_DURATION_MS,
     TURN_TIMEOUT_OFFSET_MS,
     CARDS_PER_HAND,
+    computeMinAnimationDuration,
 } from '@mercury/shared';
 import type { Action, Card, ClientMessage, GameConfig, MarbleColor } from "@mercury/shared";
 
@@ -219,8 +220,8 @@ export class Game {
         // 4️⃣ Broadcast de l'action (pour animation carte + pion côté front)
         this.broadcastAction(enrichedMove, isTimeout, isAutoPlay);
 
-        // 5️⃣ Attendre confirmation des animations (ou timeout fallback)
-        await this.waitForAnimationsOrTimeout();
+        // 5️⃣ Attendre la durée minimale d'animation (autorité serveur)
+        await this.waitForAnimationsOrTimeout(enrichedMove);
     }
 
     // ─── Handler centralisé des messages WS ──────────────────────────────────
@@ -231,8 +232,11 @@ export class Game {
                 this.handlePlayAction(msg.action, senderColor);
                 break;
             case 'animationDone':
-                this.pendingAnimationResolve?.();
-                this.pendingAnimationResolve = null;
+                // Le serveur fait autorité sur le timing : il attend
+                // computeMinAnimationDuration(action) avant de continuer.
+                // Le message du client est conservé dans le contrat WS mais
+                // ignoré ici pour empêcher un client malveillant d'écourter
+                // les animations des autres joueurs.
                 break;
             case 'turnTimeout':
                 this.handleTurnTimeout(senderColor);
@@ -345,6 +349,7 @@ export class Game {
 
         // En multi-device : vérifier que l'action vient du bon joueur
         if (senderColor !== null && senderColor !== currentPlayer.color) {
+            console.warn(`⚠️ Actions reçue de ${senderColor} alors que c'est au tour de ${currentPlayer.color}`);
             this.messenger.sendTo(senderColor, {
                 type: 'actionRejected',
                 reason: 'Not your turn',
@@ -400,7 +405,7 @@ export class Game {
         // Split 7 : le client envoie from/to pour le premier pion et splitFrom pour le second.
         if (card.value === '7' && action.splitFrom !== undefined && action.splitFrom !== 0) {
             const fromIdx = MAIN_PATH.indexOf(action.from);
-            const toIdx   = MAIN_PATH.indexOf(action.to);
+            const toIdx = MAIN_PATH.indexOf(action.to);
             if (fromIdx === -1 || toIdx === -1) return null;
             const steps1 = (toIdx - fromIdx + MAIN_PATH.length) % MAIN_PATH.length;
             const serverAction = getLegalSplit7Action(card, action.from, steps1, action.splitFrom, ctx);
@@ -471,25 +476,23 @@ export class Game {
         });
     }
 
-    private waitForAnimationsOrTimeout(): Promise<void> {
-        const fallbackDelay = 10000;
+    private waitForAnimationsOrTimeout(action: Action): Promise<void> {
+        const minDelay = computeMinAnimationDuration(action);
 
         return new Promise<void>((resolve) => {
             let settled = false;
 
-            this.pendingAnimationResolve = () => {
-                if (settled) return;
-                settled = true;
-                resolve();
-            };
-
-            setTimeout(() => {
+            const finish = () => {
                 if (settled) return;
                 settled = true;
                 this.pendingAnimationResolve = null;
-                console.log(`⏰ Animation fallback timeout (${fallbackDelay}ms)`);
                 resolve();
-            }, fallbackDelay);
+            };
+
+            // Conservé pour permettre à handleAbandonGame de débloquer la boucle.
+            this.pendingAnimationResolve = finish;
+
+            setTimeout(finish, minDelay);
         });
     }
 

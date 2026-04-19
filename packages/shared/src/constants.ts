@@ -10,7 +10,9 @@
 // Convention : toutes les durées sont en millisecondes (ms).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { ActionType } from './types.js';
+import { MAIN_PATH } from './board-config.js';
+import { isOnMainPath } from './move-validator.js';
+import type { Action, ActionType } from './types.js';
 
 // ── Durée du tour ─────────────────────────────────────────────────────────────
 
@@ -73,3 +75,44 @@ export const ENTER_IMPACT_DURATION_MS = 500;
 
 /** Durée de l'animation d'éjection du pion ennemi lors d'un enter+capture. */
 export const MARBLE_EJECTED_DURATION_MS = 400;
+
+/** Délai entre chaque carte lors d'un discard (vol en cascade).
+ *  Doit correspondre à STAGGER_MS dans board.component.ts > flyDiscardCards. */
+export const DISCARD_CARD_STAGGER_MS = 220;
+
+// ── Calcul de la durée minimale d'animation ──────────────────────────────────
+//
+// Le serveur s'en sert pour faire autorité sur le rythme entre deux coups :
+// il attend AU MOINS ce délai après avoir broadcast `actionPlayed` avant de
+// passer au tour suivant. Empêche un client malveillant de spammer
+// `animationDone` instantanément pour couper les animations des autres.
+
+export function computeMinAnimationDuration(action: Action): number {
+  if (action.type === 'pass') return 0;
+
+  let cardDuration = 0;
+  if (action.cardPlayed?.length) {
+    if (action.type === 'discard') {
+      cardDuration = (action.cardPlayed.length - 1) * DISCARD_CARD_STAGGER_MS + CARD_FLY_DURATION_MS;
+    } else {
+      cardDuration = CARD_LAND_DELAY_MS;
+    }
+  }
+
+  let marbleDuration = MARBLE_ANIMATION_DURATIONS[action.type] ?? 0;
+  if (action.type === 'move') {
+    let steps = 12;
+    if (isOnMainPath(action.from) && isOnMainPath(action.to)) {
+      const indexOfTo = MAIN_PATH.indexOf(action.to);
+      const indexOfFrom = MAIN_PATH.indexOf(action.from);
+      steps = indexOfTo > indexOfFrom
+        ? indexOfTo - indexOfFrom
+        : (MAIN_PATH.length - indexOfFrom) + indexOfTo;
+    }
+    marbleDuration = MARBLE_ANIMATION_DURATIONS[action.type] * Math.min(steps, 12);
+  }
+  if (action.type === 'capture' || action.type === 'promote') {
+    marbleDuration += MARBLE_ANIMATION_DURATIONS['move'] * 12;
+  }
+  return cardDuration + marbleDuration;
+}
