@@ -60,6 +60,8 @@ export interface Action {
   splitTo?: number;
   /** Pour un split du 7 : type de mouvement du second pion (move/capture/promote) */
   splitType?: ActionType;
+  /** Vrai quand un `enter` arrive sur une case de start occupée par un pion ennemi (capture). */
+  capturedOnEnter?: boolean;
 }
 
 // ── Configuration de partie ───────────────────────────────────────────────────

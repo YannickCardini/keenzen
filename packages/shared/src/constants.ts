@@ -10,9 +10,9 @@
 // Convention : toutes les durées sont en millisecondes (ms).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { MAIN_PATH } from './board-config.js';
+import { MAIN_PATH, START_POSITIONS } from './board-config.js';
 import { isOnMainPath } from './move-validator.js';
-import type { Action, ActionType } from './types.js';
+import type { Action, ActionType, MarbleColor } from './types.js';
 
 // ── Durée du tour ─────────────────────────────────────────────────────────────
 
@@ -87,6 +87,54 @@ export const DISCARD_CARD_STAGGER_MS = 220;
 // passer au tour suivant. Empêche un client malveillant de spammer
 // `animationDone` instantanément pour couper les animations des autres.
 
+function mainPathStepCount(from: number, to: number): number {
+  if (!isOnMainPath(from) || !isOnMainPath(to)) return 12;
+  const indexOfTo = MAIN_PATH.indexOf(to);
+  const indexOfFrom = MAIN_PATH.indexOf(from);
+  const raw = indexOfTo > indexOfFrom
+    ? indexOfTo - indexOfFrom
+    : (MAIN_PATH.length - indexOfFrom) + indexOfTo;
+  return Math.min(raw, 12);
+}
+
+function singleMarbleDuration(
+  type: ActionType,
+  from: number,
+  to: number,
+  playerColor: MarbleColor,
+  capturedOnEnter?: boolean,
+): number {
+  switch (type) {
+    case 'pass':
+      return 0;
+    case 'move': {
+      const steps = mainPathStepCount(from, to);
+      return MARBLE_ANIMATION_DURATIONS.move * steps;
+    }
+    case 'capture': {
+      const steps = mainPathStepCount(from, to);
+      return (steps - 1) * MARBLE_ANIMATION_DURATIONS.move + MARBLE_ANIMATION_DURATIONS.capture;
+    }
+    case 'promote': {
+      const startPos = START_POSITIONS[playerColor];
+      const startIdx = MAIN_PATH.indexOf(startPos);
+      const beforeStartPos = MAIN_PATH[(startIdx - 1 + MAIN_PATH.length) % MAIN_PATH.length]!;
+      const steps = mainPathStepCount(from, beforeStartPos);
+      return steps * MARBLE_ANIMATION_DURATIONS.move + MARBLE_ANIMATION_DURATIONS.promote;
+    }
+    case 'enter': {
+      if (capturedOnEnter) {
+        return MARBLE_EJECTED_DURATION_MS
+             + MARBLE_ANIMATION_DURATIONS.enter
+             + ENTER_IMPACT_DURATION_MS;
+      }
+      return MARBLE_ANIMATION_DURATIONS.enter;
+    }
+    default:
+      return MARBLE_ANIMATION_DURATIONS[type] ?? 0;
+  }
+}
+
 export function computeMinAnimationDuration(action: Action): number {
   if (action.type === 'pass') return 0;
 
@@ -99,20 +147,22 @@ export function computeMinAnimationDuration(action: Action): number {
     }
   }
 
-  let marbleDuration = MARBLE_ANIMATION_DURATIONS[action.type] ?? 0;
-  if (action.type === 'move') {
-    let steps = 12;
-    if (isOnMainPath(action.from) && isOnMainPath(action.to)) {
-      const indexOfTo = MAIN_PATH.indexOf(action.to);
-      const indexOfFrom = MAIN_PATH.indexOf(action.from);
-      steps = indexOfTo > indexOfFrom
-        ? indexOfTo - indexOfFrom
-        : (MAIN_PATH.length - indexOfFrom) + indexOfTo;
-    }
-    marbleDuration = MARBLE_ANIMATION_DURATIONS[action.type] * Math.min(steps, 12);
+  let marbleDuration = singleMarbleDuration(
+    action.type,
+    action.from,
+    action.to,
+    action.playerColor,
+    action.capturedOnEnter,
+  );
+
+  if (action.splitFrom !== undefined && action.splitTo !== undefined && action.splitType !== undefined) {
+    marbleDuration += singleMarbleDuration(
+      action.splitType,
+      action.splitFrom,
+      action.splitTo,
+      action.playerColor,
+    );
   }
-  if (action.type === 'capture' || action.type === 'promote') {
-    marbleDuration += MARBLE_ANIMATION_DURATIONS['move'] * 12;
-  }
+
   return cardDuration + marbleDuration;
 }

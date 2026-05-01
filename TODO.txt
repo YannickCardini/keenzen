@@ -1,293 +1,60 @@
-================================================================================
-BUG ACTIF : Google Sign-In Android ne fonctionne pas
-================================================================================
-Dernière mise à jour : 2026-04-18
+# TODO
 
---------------------------------------------------------------------------------
-OBJECTIF
---------------------------------------------------------------------------------
-Implémenter Google Sign-In sur Android (Capacitor) dans l'app Mercury.
-Stack : Angular + Ionic + Capacitor 8 + plugin @capawesome/capacitor-google-sign-in v0.1.2
+## 1. Accept profile pictures of any input size by resizing/compressing client-side
 
-Flux attendu :
-  1. L'utilisateur clique "Se connecter avec Google"
-  2. Le Credential Manager Android s'ouvre, l'utilisateur choisit son compte
-  3. Le plugin retourne un idToken JWT
-  4. L'app envoie cet idToken au backend (POST /api/auth/google)
-  5. Le backend vérifie le token avec Google et renvoie l'utilisateur
+**Context**
+- Profile picture upload is handled in [frontend/src/app/home/home.page.ts](frontend/src/app/home/home.page.ts#L103-L135) (`onFileSelected`).
+- The selected file is read into a base64 data URL and sent via `auth.updateProfile(...)` ([frontend/src/app/services/auth.service.ts:101-109](frontend/src/app/services/auth.service.ts#L101-L109)) to `PATCH /api/auth/user/:id`.
+- The backend validator in [backend/src/auth/auth-router.ts:114-130](backend/src/auth/auth-router.ts#L114-L130) only accepts:
+  - MIME type `image/jpeg`, `image/png`, or `image/webp`
+  - Base64 data URL whose decoded payload is ≤ 2 MB
+- The frontend currently *rejects* any input that does not already meet the server constraints:
+  - Wrong MIME type → "Only JPEG, PNG, or WebP images are allowed."
+  - File size > 2 MB → "Image must be under 2 MB."
+  - Natural dimensions > 512×512 px → "Image dimensions must not exceed 512×512 px."
 
---------------------------------------------------------------------------------
-ERREUR OBSERVÉE
---------------------------------------------------------------------------------
-Sur l'appareil Android physique (lancé depuis Android Studio) :
+**Goal**
+Stop rejecting oversized or differently-formatted images. Instead, transparently transform any user-selected image so that the data URL sent to the backend always satisfies the existing server-side constraints. The backend validator must remain unchanged.
 
-  UI : "Could not sign in with Google. Please try again." (home.page)
+**Target output constraints (must be enforced after transformation)**
+- Format: `image/jpeg`, `image/png`, or `image/webp` (pick one canonical output format — `image/webp` recommended for best size; fall back to `image/jpeg` if WebP encoding is unavailable).
+- Max dimensions: 512×512 px (preserve aspect ratio; downscale only, never upscale).
+- Max payload size after base64 encoding: ≤ 2 MB (target a comfortable margin, e.g. ≤ 1.5 MB).
 
-  DevTools console :
-    [Auth] GoogleSignIn.signIn() error: P: The user canceled the sign-in flow.
-    [Auth] Error message: The user canceled the sign-in flow.
-    error code renvoyé par le plugin : SIGN_IN_CANCELED
+**Sub-tasks**
 
-  Logcat (erreur réelle de GMS, masquée par le plugin) :
-    [GoogleSignIn_flowRunner] Flow failed.
-    cgfd: [16] Account reauth failed.
-    → GMS code 16 = SIGN_IN_FAILED (pas un vrai "cancel")
+1. **Broaden the file input acceptance**
+   - In [frontend/src/app/home/home.page.html:150](frontend/src/app/home/home.page.html#L150), change `accept="image/jpeg,image/png,image/webp"` to `accept="image/*"` so the OS picker allows any image type (HEIC, GIF, BMP, TIFF, etc., subject to browser support).
 
-L'utilisateur SÉLECTIONNE bien son compte dans la popup Google,
-mais GMS rejette la demande juste après → le plugin mappe l'erreur
-en SIGN_IN_CANCELED ce qui est trompeur.
+2. **Remove the hard rejections in `onFileSelected`** ([home.page.ts:108-116, 122-126](frontend/src/app/home/home.page.ts#L108-L126))
+   - Drop the MIME-type whitelist check.
+   - Drop the 2 MB pre-check.
+   - Drop the 512×512 dimension check.
+   - Keep a sanity check that the selected `File` is actually decodable as an image (i.e. handle `img.onerror` by surfacing a friendly "Could not read image." error).
 
---------------------------------------------------------------------------------
-VALEURS DE CONFIGURATION (vérifiées et correctes)
---------------------------------------------------------------------------------
+3. **Implement a client-side image transformer**
+   - Create a helper (e.g. `frontend/src/app/services/image-utils.ts` or a private method in `HomePage`) with a signature like:
+     `async function normalizeProfileImage(file: File): Promise<string>` returning a base64 data URL that satisfies the target constraints.
+   - Steps:
+     a. Read the file into an `HTMLImageElement` (via `URL.createObjectURL` or `FileReader.readAsDataURL`).
+     b. Compute target dimensions: scale down so the longer side ≤ 512 px, preserving aspect ratio. Do not upscale.
+     c. Draw onto an offscreen `<canvas>` of the target dimensions.
+     d. Export with `canvas.toDataURL('image/webp', quality)` (fallback to `'image/jpeg'`).
+     e. If the resulting data URL exceeds the 2 MB (or chosen ≤ 1.5 MB) budget, iteratively reduce `quality` (e.g. start at 0.9, step down by 0.1, floor at 0.4) and re-export until it fits.
+     f. If the budget still cannot be met at the lowest quality, additionally reduce dimensions (e.g. 384, then 256) and retry.
+   - Release any object URLs created (`URL.revokeObjectURL`) once the image is loaded.
 
-Firebase / Google Cloud :
-  project_id       : mercury-491304
-  project_number   : 211257291077
-  package_name     : app.android.mercury
-  mobilesdk_app_id : 1:211257291077:android:76e089cf3888df418d4e2c
+4. **Wire the transformer into the upload flow**
+   - Replace the current logic in `onFileSelected` so it calls `normalizeProfileImage(file)` and assigns the resulting data URL to both `this.editPreviewUrl` and `this.editPictureDataUrl`.
+   - Show a non-blocking status while the transformation runs (the canvas work is fast but a very large source image may take a moment).
+   - On transformer failure, set `this.editError` to a clear message (e.g. "Could not process image, please try another file.").
 
-OAuth Clients enregistrés dans Google Cloud Console :
-  [Android - client_type 1]
-    client_id        : 211257291077-pesle08guglamsenieugfpc8ebn6c0o1.apps.googleusercontent.com
-    SHA-1 enregistré : 80:C5:9D:0D:2E:4C:0E:0D:7A:1E:E3:DE:6E:0A:05:CD:91:C0:25:78
-    package_name     : app.android.mercury
+5. **Edge cases to handle explicitly**
+   - Animated formats (GIF, animated WebP): only the first frame needs to be kept — the canvas pipeline naturally handles this, but verify.
+   - Formats the browser cannot decode natively (e.g. HEIC on non-Safari browsers): the `<img>` load will fail; surface the "Could not read image." error instead of crashing.
+   - EXIF orientation: if the source is a JPEG from a phone camera, ensure the rotation is respected (use `createImageBitmap(file, { imageOrientation: 'from-image' })` when available, otherwise document this as a known limitation).
+   - Transparent PNGs exported to JPEG: prefer WebP to preserve alpha; if falling back to JPEG, fill the canvas with a solid background (e.g. white) before drawing.
 
-  [Web - client_type 3]  ← celui utilisé dans le code comme serverClientId
-    client_id        : 211257291077-4uhmhpvlo13ub7f03imeu2du5l3g8ndl.apps.googleusercontent.com
-
-SHA-1 du debug keystore local (~/.android/debug.keystore) :
-  80:C5:9D:0D:2E:4C:0E:0D:7A:1E:E3:DE:6E:0A:05:CD:91:C0:25:78
-  → CORRESPOND au certificat enregistré dans Google Cloud ✓
-
---------------------------------------------------------------------------------
-FICHIERS DE CONFIG ET LEURS VALEURS ACTUELLES
---------------------------------------------------------------------------------
-
-frontend/android/app/google-services.json
-  → project_number : "211257291077"                              ✓
-  → mobilesdk_app_id : "1:211257291077:android:76e089cf3888df418d4e2c" ✓
-  → oauth_client[0] client_type 1 + certificate_hash correct    ✓
-  → oauth_client[1] client_type 3 (Web)                         ✓
-
-frontend/src/environments/environment.ts
-  googleClientId : "211257291077-4uhmhpvlo13ub7f03imeu2du5l3g8ndl.apps.googleusercontent.com" (Web) ✓
-
-frontend/src/environments/environment.prod.ts
-  googleClientId : même valeur Web                              ✓
-
-frontend/capacitor.config.ts
-  GoogleSignIn.clientId       : Web Client ID ✓
-  GoogleSignIn.serverClientId : Web Client ID ✓
-
-frontend/android/app/src/main/assets/capacitor.config.json
-  clientId       : Web Client ID ✓
-  serverClientId : Web Client ID ✓
-
-frontend/android/app/src/main/res/values/strings.xml
-  server_client_id : Web Client ID ✓
-
-frontend/android/app/build.gradle
-  applicationId : "app.android.mercury" ✓
-
-frontend/android/app/src/main/AndroidManifest.xml
-  package géré via applicationId ✓
-
-frontend/src/app/services/auth.service.ts
-  GoogleSignIn.initialize({ clientId: environment.googleClientId })
-  → PAS de scopes (supprimé — l'userinfo.profile était redondant et
-    provoquait un reauth GMS)
-
-
---------------------------------------------------------------------------------
-PACKAGES NPM (Google Sign-In)
---------------------------------------------------------------------------------
-
-@capawesome/capacitor-google-sign-in  ^0.1.2   ← plugin principal
-@capacitor/core                       ^8.1.0
-@capacitor/android                    ^8.1.0
-@capacitor/cli                        ^8.3.0
-@ionic/angular                        ^8.0.0
-@angular/core                         ^20.0.0
-
---------------------------------------------------------------------------------
-CODE DE CONNEXION GOOGLE (état actuel)
---------------------------------------------------------------------------------
-
-── capacitor.config.ts ─────────────────────────────────────────────────────────
-plugins: {
-  GoogleSignIn: {
-    clientId:       '211257291077-4uhmhpvlo13ub7f03imeu2du5l3g8ndl.apps.googleusercontent.com',
-    serverClientId: '211257291077-4uhmhpvlo13ub7f03imeu2du5l3g8ndl.apps.googleusercontent.com',
-  },
-},
-
-── auth.service.ts — initialisation ────────────────────────────────────────────
-import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in';
-
-// Dans le constructor :
-    constructor() {
-        const platform = Capacitor.getPlatform();
-        console.log('[Auth] Platform:', platform);
-        console.log('[Auth] Initializing GoogleSignIn with clientId:', environment.googleClientId);
-
-        void GoogleSignIn.initialize({
-            clientId: environment.googleClientId,
-        });
-
-        // On web, signIn() redirects the page to Google and the promise never resolves.
-        // When Google redirects back, the id_token is in the URL hash — handle it here.
-        if (window.location.hash.includes('id_token')) {
-            console.log('[Auth] id_token found in URL hash, handling redirect callback...');
-            void this.handleRedirectCallback();
-        }
-    }
-
-── auth.service.ts — login() ───────────────────────────────────────────────────
-async login(): Promise<void> {
-    this.isLoading$.next(true);
-    try {
-        const result = await GoogleSignIn.signIn();
-        if (result.idToken) {
-            await this.verifyTokenWithServer(result.idToken);
-        }
-    } catch (err) {
-        this.loginError$.next('google');
-    } finally {
-        this.isLoading$.next(false);
-    }
-}
-
-── auth.service.ts — verifyTokenWithServer() ───────────────────────────────────
-// Envoie l'idToken au backend pour vérification
-const user = await firstValueFrom(
-    this.http.post<AuthUser>(`${environment.apiUrl}/api/auth/google`, { idToken })
-);
-
-================================================================================
-SESSION DE DIAGNOSTIC — 2026-04-18
-================================================================================
-
---------------------------------------------------------------------------------
-VÉRIFICATIONS EFFECTUÉES (tout est CORRECT côté config)
---------------------------------------------------------------------------------
-
-1. Signature APK au runtime (./gradlew signingReport)
-   Variant debug → SHA-1 : 80:C5:9D:0D:2E:4C:0E:0D:7A:1E:E3:DE:6E:0A:05:CD:91:C0:25:78
-   Toutes les variantes (debug, debugAndroidTest, tous les sous-modules Capacitor)
-   utilisent bien /home/loubard/.android/debug.keystore.
-   → Identique au SHA-1 enregistré dans Google Cloud ✓
-   → Identique au certificate_hash dans google-services.json ✓
-
-2. Audit Google Cloud Console (projet mercury-491304) via navigateur :
-
-   [Audience]
-     - Publishing status          : Testing
-     - User type                  : External
-     - Test users                 : 1 user (1 test, 0 other)
-                                    → yannick.cardini@gmail.com EST bien dans la liste ✓
-     - OAuth user cap             : 100
-
-   [Branding]
-     - App name                   : "Mercury" ✓
-     - User support email         : yannick.cardini@gmail.com ✓
-     - Developer contact email    : yannick.cardini@gmail.com ✓
-     - Verification status        : "not required since app is in Testing status"
-
-   [Data Access / Scopes]
-     - openid ✓
-     - .../auth/userinfo.email ✓
-     - .../auth/userinfo.profile ✓
-     - Pas de scopes sensibles ni restreints
-
-   [Clients]
-     - Mercury Android Debug (créé le 2026-04-01)
-         client_id   : 211257291077-pesle08guglamsenieugfpc8ebn6c0o1
-         package     : app.android.mercury ✓
-         SHA-1       : 80:C5:9D:…:25:78 ✓
-         Last used   : 2026-04-05 (les requêtes ATTEIGNENT bien Google)
-         Ownership   : non vérifiée (marquée "optional")
-
-     - Web client (auto created by Google Service) (créé le 2026-04-04)
-         client_id   : 211257291077-4uhmhpvlo13ub7f03imeu2du5l3g8ndl
-         Authorized JavaScript origins / Redirect URIs :
-           http://localhost
-           http://localhost:5000
-           http://localhost:4200
-           https://mercury-491304.firebaseapp.com
-           https://mercury-491304.firebaseapp.com/__/auth/handler
-           https://orange-mushroom-06fe48c03.6.azurestaticapps.net
-           https://mercury-api-e5gqghhkdtfheqht.francecentral-01.azurewebsites.net/auth/login/google/callback
-
-   Avertissements du Project Checkup (non bloquants) :
-     - "App ownership not verified" pour Mercury Android Debug (optional)
-     - Web client utilise le flux implicite déprécié (créé par Firebase)
-
-CONCLUSION CONFIG : rien à corriger côté Google Cloud.
-Les requêtes ATTEIGNENT bien Google (Last used date à jour),
-c'est GMS sur l'appareil qui rejette après sélection du compte.
-
---------------------------------------------------------------------------------
-ANALYSE DU PLUGIN
---------------------------------------------------------------------------------
-
-Le plugin @capawesome/capacitor-google-sign-in@0.1.2 utilise
-**GetSignInWithGoogleOption** (flux "bouton Sign in with Google"),
-PAS GetGoogleIdOption (flux identity).
-
-Source vérifiée :
-  node_modules/@capawesome/capacitor-google-sign-in/android/src/main/java/
-    io/capawesome/capacitorjs/plugins/googlesignin/GoogleSignIn.java (ligne 78)
-
-    GetSignInWithGoogleOption.Builder optionBuilder =
-        new GetSignInWithGoogleOption.Builder(clientId);
-
-Pourquoi l'erreur apparaît comme "user canceled" :
-  - Quand GMS échoue (code 16), Credential Manager ferme la bottom sheet
-  - Cela lève une GetCredentialCancellationException
-  - Le plugin (lignes 104-106) mappe TOUTE GetCredentialCancellationException
-    vers SIGN_IN_CANCELED, qu'il s'agisse d'un vrai cancel ou d'un échec GMS.
-  - L'erreur réelle (code 16) est uniquement visible en logcat.
-
-L'API du plugin n'expose AUCUN paramètre pour :
-  - filterByAuthorizedAccounts
-  - autoSelectEnabled
-  - passer en GetGoogleIdOption
-
---------------------------------------------------------------------------------
-TENTATIVES DE CORRECTION — 
---------------------------------------------------------------------------------
-
-[TENTATIVE 1 — ÉCHEC] Retirer les scopes de GoogleSignIn.initialize()
-  Action : supprimé scopes: ['...userinfo.profile']
-  Résultat : même erreur SIGN_IN_CANCELED / code 16 reauth failed.
-
-[TENTATIVE 2 — NON CONCLUANT, config correcte] Vérifier SHA-1 runtime
-  Action : ./gradlew signingReport depuis frontend/android
-  Résultat : SHA-1 confirmé identique au keystore enregistré.
-  → N'était PAS la cause.
-
-[TENTATIVE 3 — NON CONCLUANT, config correcte] Audit OAuth consent screen
-  Action : vérifié via navigateur :
-           publishing status, test users, branding, scopes,
-           clients Android/Web, authorized origins.
-  Résultat : tout est correctement configuré.
-  → N'était PAS la cause.
-
-[TENTATIVE 4 — ÉCHEC] Clear GMS data + app data + reboot
-  Action :
-    - Settings → Apps → Mercury → Storage → Clear data
-    - Settings → Apps → Google Play services → Storage → Clear all data
-    - Reboot
-    - Rebuild + réinstallation
-  Résultat : même erreur.
-  → Ce n'est PAS un simple cache GMS corrompu.
-
-[TENTATIVE 5 — ÉCHEC] Essayer un autre compte Google sur l'appareil
-  Action : ajouté un second compte comme test user, signé dans ce compte
-           sur le téléphone, retry du flow.
-  Résultat : même erreur avec l'autre compte.
-  → Ce n'est PAS spécifique au compte yannick.cardini, ni à la 2FA.
-
-
-
+6. **Verification**
+   - Manually test with: a 4000×3000 px JPEG > 5 MB, a 1024×1024 px PNG with transparency, a small 200×200 px WebP (must not be upscaled), and a non-image file (should show error).
+   - Confirm the request payload sent to `PATCH /api/auth/user/:id` always passes the server-side validator in [backend/src/auth/auth-router.ts:114-130](backend/src/auth/auth-router.ts#L114-L130).

@@ -212,6 +212,15 @@ export class Game {
         this.pendingTimeoutAction = null;
         const enrichedMove: Action = { ...move, playerColor: player.color };
 
+        if (enrichedMove.type === 'enter') {
+            const enemyOnStart = this.players.some(
+                p => p.color !== player.color && p.marblePositions.includes(enrichedMove.to),
+            );
+            if (enemyOnStart) {
+                enrichedMove.capturedOnEnter = true;
+            }
+        }
+
         // 3️⃣ Mettre à jour l'état interne
         player.applyAction(enrichedMove);
         this.updateMarblePositions(player, enrichedMove);

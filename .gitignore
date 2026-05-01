@@ -21,3 +21,6 @@ backend/.env
 
 # Cache
 frontend/.angular/
+
+# IA
+.claude/
