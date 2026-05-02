@@ -1572,6 +1572,16 @@ $bg-mid: #1a2840;
   text-align: left;
 }
 
+.edit-status {
+  font-size: 0.78rem;
+  color: rgba($c-blue, 0.9);
+  padding: 7px 10px;
+  background: rgba($c-blue, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba($c-blue, 0.2);
+  text-align: left;
+}
+
 .profile-actions {
   display: flex;
   gap: 8px;

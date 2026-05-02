@@ -11,6 +11,7 @@ import { AuthService, type AuthUser } from '../services/auth.service';
 import type { MarbleColor } from '@mercury/shared';
 import { environment } from 'src/environments/environment';
 import { generateGuestName } from '../shared/guest-name';
+import { normalizeProfileImage } from '../services/image-utils';
 
 @Component({
   selector: 'app-home',
@@ -35,6 +36,7 @@ export class HomePage implements OnInit, OnDestroy {
   editPreviewUrl = '';
   editPictureDataUrl = '';
   isSaving = false;
+  isProcessingImage = false;
   editError = '';
   private updateErrorSub: Subscription | null = null;
 
@@ -100,38 +102,25 @@ export class HomePage implements OnInit, OnDestroy {
     }
   }
 
-  onFileSelected(event: Event): void {
+  async onFileSelected(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      this.editError = 'Only JPEG, PNG, or WebP images are allowed.';
-      return;
+    this.editError = '';
+    this.isProcessingImage = true;
+    try {
+      const dataUrl = await normalizeProfileImage(file);
+      this.editPreviewUrl = dataUrl;
+      this.editPictureDataUrl = dataUrl;
+    } catch (err) {
+      this.editError = err instanceof Error && err.message === 'Could not read image.'
+        ? 'Could not read image.'
+        : 'Could not process image, please try another file.';
+    } finally {
+      this.isProcessingImage = false;
+      input.value = '';
     }
-    if (file.size > 2 * 1024 * 1024) {
-      this.editError = 'Image must be under 2 MB.';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const img = new Image();
-      img.onload = () => {
-        if (img.naturalWidth > 512 || img.naturalHeight > 512) {
-          this.editError = 'Image dimensions must not exceed 512×512 px.';
-          return;
-        }
-        this.editPreviewUrl = dataUrl;
-        this.editPictureDataUrl = dataUrl;
-        this.editError = '';
-      };
-      img.onerror = () => { this.editError = 'Could not read image.'; };
-      img.src = dataUrl;
-    };
-    reader.readAsDataURL(file);
   }
 
   async saveProfile(): Promise<void> {

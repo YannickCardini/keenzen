@@ -4,8 +4,8 @@
 // Gère une unique session en attente à la fois.
 // Les joueurs sont assignés dans l'ordre red → green → blue → orange.
 // Dès que 4 joueurs sont présents la partie démarre immédiatement.
-// Après MATCHMAKING_TIMEOUT_MS sans 4 joueurs, les slots vides sont remplis
-// par des bots et la partie démarre quand même.
+// Tant qu'un humain attend, on appelle l'agent IA externe avec une probabilité
+// croissante (+1% / seconde) qui est divisée par 2 après chaque dispatch.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import crypto from 'node:crypto';
@@ -15,7 +15,9 @@ import { GameRegistry } from './game-registry.js';
 import type { GameConfig, MarbleColor } from '@mercury/shared';
 
 const COLORS: MarbleColor[] = ['red', 'green', 'blue', 'orange'];
-const MATCHMAKING_TIMEOUT_MS = 30_000;
+const BOT_USER_IDS = new Set(['1', '2', '3', '4']);
+const BOT_DISPATCH_TICK_MS = 1_000;
+const BOT_DISPATCH_CHANCE_STEP = 0.01;
 
 interface MatchPlayer {
     ws: WebSocket;
@@ -30,7 +32,8 @@ interface MatchPlayer {
 interface PendingMatchmaking {
     messenger: MultiWsMessenger;
     players: MatchPlayer[];
-    timer: NodeJS.Timeout | null;
+    botDispatchTimer: NodeJS.Timeout | null;
+    botDispatchChance: number;
     playerIdentities: Map<string, { gameId: string; color: MarbleColor }> | null;
 }
 
@@ -43,7 +46,8 @@ export class MatchmakingManager {
             this.session = {
                 messenger: new MultiWsMessenger(),
                 players: [],
-                timer: null,
+                botDispatchTimer: null,
+                botDispatchChance: 0,
                 playerIdentities: playerIdentities ?? null,
             };
         }
@@ -74,12 +78,56 @@ export class MatchmakingManager {
         this.broadcastStatus();
         console.log(`🔍 Matchmaking — ${playerName} (${color}) rejoint (${this.session.players.length}/4)`);
 
-        if (this.session.players.length === 1) {
-            this.session.timer = setTimeout(() => this.fillWithBots(), MATCHMAKING_TIMEOUT_MS);
+        if (!this.session.botDispatchTimer) {
+            this.session.botDispatchTimer = setInterval(
+                () => this.tickBotDispatch(),
+                BOT_DISPATCH_TICK_MS,
+            );
         }
 
         if (this.session.players.length === 4) {
             this.launch();
+        }
+    }
+
+    private tickBotDispatch(): void {
+        if (!this.session) return;
+
+        const hasHuman = this.session.players.some(
+            p => !p.userId || !BOT_USER_IDS.has(p.userId),
+        );
+        if (!hasHuman) return;
+        if (this.session.players.length >= 4) return;
+
+        this.session.botDispatchChance += BOT_DISPATCH_CHANCE_STEP;
+        if (Math.random() >= this.session.botDispatchChance) return;
+
+        this.session.botDispatchChance /= 2;
+        void this.dispatchBotAgent();
+    }
+
+    private async dispatchBotAgent(): Promise<void> {
+        const url = process.env['AGENT_URL'];
+        const secret = process.env['BOT_SECRET'];
+        if (!url || !secret) {
+            console.warn('🤖 AGENT_URL or BOT_SECRET non configuré — dispatch ignoré');
+            return;
+        }
+        try {
+            const res = await fetch(`${url.replace(/\/$/, '')}/dispatch`, {
+                method: 'POST',
+                headers: { 'X-Bot-Secret': secret, 'Content-Type': 'application/json' },
+                body: '{}',
+            });
+            if (res.ok) {
+                console.log('🤖 Bot agent dispatched');
+            } else if (res.status === 503) {
+                console.log('🤖 Agent service occupé (tous les bots sont actifs)');
+            } else {
+                console.warn(`🤖 Dispatch agent a retourné ${res.status}`);
+            }
+        } catch (err) {
+            console.warn('🤖 Dispatch agent a échoué:', err);
         }
     }
 
@@ -90,7 +138,7 @@ export class MatchmakingManager {
         console.log(`🔴 Matchmaking — ${color} déconnecté (${this.session.players.length} restant(s))`);
 
         if (this.session.players.length === 0) {
-            if (this.session.timer) clearTimeout(this.session.timer);
+            if (this.session.botDispatchTimer) clearInterval(this.session.botDispatchTimer);
             this.session = null;
             console.log('❌ Matchmaking session annulée (tous déconnectés)');
         } else {
@@ -98,27 +146,21 @@ export class MatchmakingManager {
         }
     }
 
-    private fillWithBots(): void {
-        if (!this.session) return;
-        console.log(`⏱️ Matchmaking timeout — remplissage avec des bots`);
-        this.launch();
-    }
-
     private launch(): void {
         if (!this.session) return;
-        if (this.session.timer) clearTimeout(this.session.timer);
+        if (this.session.botDispatchTimer) clearInterval(this.session.botDispatchTimer);
 
         const playersByColor = new Map(this.session.players.map(p => [p.color, p]));
 
         const config: GameConfig = {
             players: COLORS.map(color => {
-                const p = playersByColor.get(color);
+                const p = playersByColor.get(color)!;
                 return {
                     color,
-                    name: p?.name ?? 'Bot',
-                    isHuman: playersByColor.has(color),
-                    ...(p?.picture ? { picture: p.picture } : {}),
-                    ...(p?.userId ? { userId: p.userId } : {}),
+                    name: p.name,
+                    isHuman: true,
+                    ...(p.picture ? { picture: p.picture } : {}),
+                    ...(p.userId ? { userId: p.userId } : {}),
                 };
             }),
         };
@@ -126,10 +168,9 @@ export class MatchmakingManager {
         const messenger = this.session.messenger;
         const humanPlayers = [...this.session.players];
         const playerIdentities = this.session.playerIdentities;
-        const humanCount = humanPlayers.length;
         this.session = null;
 
-        console.log(`🚀 Matchmaking — lancement avec ${humanCount} humain(s) et ${4 - humanCount} bot(s)`);
+        console.log(`🚀 Matchmaking — lancement avec 4 joueurs`);
         const game = new Game(config, messenger);
         GameRegistry.register(game.id, game);
 

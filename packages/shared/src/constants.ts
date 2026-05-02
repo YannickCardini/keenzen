@@ -17,7 +17,7 @@ import type { Action, ActionType, MarbleColor } from './types.js';
 // ── Durée du tour ─────────────────────────────────────────────────────────────
 
 /** Durée d'un tour de jeu en secondes. */
-export const TURN_DURATION_SECONDS = 30;
+export const TURN_DURATION_SECONDS = 60;
 
 /** Durée d'un tour de jeu en millisecondes. */
 export const TURN_DURATION_MS = TURN_DURATION_SECONDS * 1000;

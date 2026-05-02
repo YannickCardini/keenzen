@@ -208,7 +208,7 @@ export interface StartMessage {
 /**
  * Rejoint la file d'attente matchmaking publique.
  * Le serveur assigne une couleur et lance la partie dès que 4 joueurs sont présents
- * (ou remplit avec des bots après 30 s).
+ * (ou remplit avec des bots après 60 s).
  */
 export interface JoinMatchmakingMessage {
   type: 'joinMatchmaking';

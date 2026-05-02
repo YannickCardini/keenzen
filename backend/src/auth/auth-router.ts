@@ -122,7 +122,7 @@ router.patch('/user/:id', async (req: Request, res: Response) => {
             res.status(400).json({ error: 'Picture must be a base64 data URL (image/jpeg, image/png, or image/webp)' });
             return;
         }
-        const rawBytes = dataUrlMatch?[2].length * 3 / 4 : 0;
+        const rawBytes = dataUrlMatch ? [2].length * 3 / 4 : 0;
         if (rawBytes > 2 * 1024 * 1024) {
             res.status(400).json({ error: 'Picture exceeds 2 MB limit' });
             return;
@@ -179,9 +179,9 @@ router.get('/user/:id', async (req: Request, res: Response) => {
     }
 });
 
-// POST /api/auth/bot — création/récupération d'un bot sans compte Google
+// POST /api/auth/bot — connexion d'un bot existant en BDD
 router.post('/bot', async (req: Request, res: Response) => {
-    const { secret, botId, name } = req.body as { secret?: string; botId?: string; name?: string };
+    const { secret, botId } = req.body as { secret?: string; botId?: string; };
 
     if (!secret || secret !== process.env['BOT_SECRET']) {
         res.status(401).json({ error: 'Invalid bot secret' });
@@ -191,34 +191,31 @@ router.post('/bot', async (req: Request, res: Response) => {
         res.status(400).json({ error: 'botId must be 1–64 alphanumeric/dash characters' });
         return;
     }
-    if (!name || name.length < 1 || name.length > 30) {
-        res.status(400).json({ error: 'name must be 1–30 characters' });
-        return;
-    }
-
-    const now = new Date().toISOString();
-    let user: UserDoc;
 
     try {
         const container = await getUsersContainer();
+        let resource: UserDoc | undefined;
         try {
-            const { resource } = await container.item(botId, botId).read<UserDoc>();
-            if (!resource) throw Object.assign(new Error('Not found'), { code: 404 });
-            resource.lastLogin = now;
-            await container.item(botId, botId).replace(resource);
-            user = resource;
+            const result = await container.item(botId, botId).read<UserDoc>();
+            resource = result.resource;
         } catch (err: unknown) {
-            if ((err as { code?: number }).code !== 404) throw err;
-            user = { id: botId, email: '', name, picture: '', points: 0, ranking: 0, lastLogin: now, createdAt: now };
-            await container.items.create(user);
+            if ((err as { code?: number }).code === 404) {
+                res.status(404).json({ error: 'Bot not found' });
+                return;
+            }
+            throw err;
         }
+        if (!resource) {
+            res.status(404).json({ error: 'Bot not found' });
+            return;
+        }
+        resource.lastLogin = new Date().toISOString();
+        await container.item(botId, botId).replace(resource);
+        res.json({ userId: resource.id, name: resource.name, picture: resource.picture, points: resource.points, ranking: resource.ranking });
     } catch (err) {
         console.error('❌ Cosmos DB error (POST /bot):', err);
         res.status(500).json({ error: 'Database error' });
-        return;
     }
-
-    res.json({ userId: user.id, name: user.name, points: user.points, ranking: user.ranking });
 });
 
 // GET /api/auth/leaderboard — top 100 players sorted by ranking

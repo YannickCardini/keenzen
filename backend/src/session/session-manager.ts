@@ -165,7 +165,7 @@ export class SessionManager {
     /**
      * Rejoint la file d'attente matchmaking publique.
      * Le serveur assigne une couleur et démarre la partie dès que 4 joueurs sont là
-     * (ou remplit avec des bots après 30 s).
+     * (ou remplit avec des bots après 60 s).
      */
     joinMatchmaking(ws: WebSocket, playerName?: string, browserId?: string, picture?: string, userId?: string): void {
         this.matchmaking.joinQueue(ws, playerName, this.playerIdentities, browserId, picture, userId);

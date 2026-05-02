@@ -1,60 +1,96 @@
-# TODO
+================================================================================
+MERCURY — TODO LIST
+================================================================================
 
-## 1. Accept profile pictures of any input size by resizing/compressing client-side
+--------------------------------------------------------------------------------
+TASK 1 — Declare the last connected player winner when all others disconnect
+--------------------------------------------------------------------------------
 
-**Context**
-- Profile picture upload is handled in [frontend/src/app/home/home.page.ts](frontend/src/app/home/home.page.ts#L103-L135) (`onFileSelected`).
-- The selected file is read into a base64 data URL and sent via `auth.updateProfile(...)` ([frontend/src/app/services/auth.service.ts:101-109](frontend/src/app/services/auth.service.ts#L101-L109)) to `PATCH /api/auth/user/:id`.
-- The backend validator in [backend/src/auth/auth-router.ts:114-130](backend/src/auth/auth-router.ts#L114-L130) only accepts:
-  - MIME type `image/jpeg`, `image/png`, or `image/webp`
-  - Base64 data URL whose decoded payload is ≤ 2 MB
-- The frontend currently *rejects* any input that does not already meet the server constraints:
-  - Wrong MIME type → "Only JPEG, PNG, or WebP images are allowed."
-  - File size > 2 MB → "Image must be under 2 MB."
-  - Natural dimensions > 512×512 px → "Image dimensions must not exceed 512×512 px."
+CONTEXT:
+  When a player's WebSocket closes and does not reconnect within 180 seconds,
+  `game-messenger.ts` calls `onPermanentDisconnect(color)`, which in turn calls
+  `game.ts:markDisconnected(color)`. That method sets `player.isConnected = false`
+  and calls `checkAbort()`.
 
-**Goal**
-Stop rejecting oversized or differently-formatted images. Instead, transparently transform any user-selected image so that the data URL sent to the backend always satisfies the existing server-side constraints. The backend validator must remain unchanged.
+  Currently, `checkAbort()` (game.ts) counts connected humans and only aborts the
+  game (reason: 'abandoned') if that count reaches 0. There is no special handling
+  for the case where exactly 1 human player remains connected.
 
-**Target output constraints (must be enforced after transformation)**
-- Format: `image/jpeg`, `image/png`, or `image/webp` (pick one canonical output format — `image/webp` recommended for best size; fall back to `image/jpeg` if WebP encoding is unavailable).
-- Max dimensions: 512×512 px (preserve aspect ratio; downscale only, never upscale).
-- Max payload size after base64 encoding: ≤ 2 MB (target a comfortable margin, e.g. ≤ 1.5 MB).
+WHAT TO DO:
+  In `backend/src/game/game.ts`, update `checkAbort()` so that when the number of
+  connected human players drops to 1, the game ends with a win for that player
+  instead of continuing or aborting as 'abandoned'.
 
-**Sub-tasks**
+  Steps:
+  1. After computing `connectedHumans` in `checkAbort()`, add a branch:
+     if `connectedHumans === 1` AND total human players > 1 (i.e. at least one
+     has permanently disconnected), find the single remaining connected human
+     player and declare them the winner.
 
-1. **Broaden the file input acceptance**
-   - In [frontend/src/app/home/home.page.html:150](frontend/src/app/home/home.page.html#L150), change `accept="image/jpeg,image/png,image/webp"` to `accept="image/*"` so the OS picker allows any image type (HEIC, GIF, BMP, TIFF, etc., subject to browser support).
+  2. Reuse the existing win-end flow used at the bottom of the game loop:
+     - Call `applyEndGamePoints(winner.color)` so scoring is applied correctly
+       (winner: +3 pts; already-penalized disconnected players keep their -2 and
+       are skipped by the scoring guard on `penalizedUserIds`).
+     - Broadcast `gameEnded` with `reason: 'win'` and the winner's color.
+     - Set `gameFinished = true` and `aborted = true` to exit the game loop.
+     - Remove the game from the registry.
 
-2. **Remove the hard rejections in `onFileSelected`** ([home.page.ts:108-116, 122-126](frontend/src/app/home/home.page.ts#L108-L126))
-   - Drop the MIME-type whitelist check.
-   - Drop the 2 MB pre-check.
-   - Drop the 512×512 dimension check.
-   - Keep a sanity check that the selected `File` is actually decodable as an image (i.e. handle `img.onerror` by surfacing a friendly "Could not read image." error).
+  3. Do NOT trigger this path if only bots remain (i.e. the single remaining
+     "human" must have `isHuman === true && isConnected === true`).
 
-3. **Implement a client-side image transformer**
-   - Create a helper (e.g. `frontend/src/app/services/image-utils.ts` or a private method in `HomePage`) with a signature like:
-     `async function normalizeProfileImage(file: File): Promise<string>` returning a base64 data URL that satisfies the target constraints.
-   - Steps:
-     a. Read the file into an `HTMLImageElement` (via `URL.createObjectURL` or `FileReader.readAsDataURL`).
-     b. Compute target dimensions: scale down so the longer side ≤ 512 px, preserving aspect ratio. Do not upscale.
-     c. Draw onto an offscreen `<canvas>` of the target dimensions.
-     d. Export with `canvas.toDataURL('image/webp', quality)` (fallback to `'image/jpeg'`).
-     e. If the resulting data URL exceeds the 2 MB (or chosen ≤ 1.5 MB) budget, iteratively reduce `quality` (e.g. start at 0.9, step down by 0.1, floor at 0.4) and re-export until it fits.
-     f. If the budget still cannot be met at the lowest quality, additionally reduce dimensions (e.g. 384, then 256) and retry.
-   - Release any object URLs created (`URL.revokeObjectURL`) once the image is loaded.
+  4. No frontend changes are needed; the existing `gameEnded` handler already
+     processes `reason: 'win'` correctly.
 
-4. **Wire the transformer into the upload flow**
-   - Replace the current logic in `onFileSelected` so it calls `normalizeProfileImage(file)` and assigns the resulting data URL to both `this.editPreviewUrl` and `this.editPictureDataUrl`.
-   - Show a non-blocking status while the transformation runs (the canvas work is fast but a very large source image may take a moment).
-   - On transformer failure, set `this.editError` to a clear message (e.g. "Could not process image, please try another file.").
+--------------------------------------------------------------------------------
+TASK 2 — Display the player's profile picture in the new-turn banner
+--------------------------------------------------------------------------------
 
-5. **Edge cases to handle explicitly**
-   - Animated formats (GIF, animated WebP): only the first frame needs to be kept — the canvas pipeline naturally handles this, but verify.
-   - Formats the browser cannot decode natively (e.g. HEIC on non-Safari browsers): the `<img>` load will fail; surface the "Could not read image." error instead of crashing.
-   - EXIF orientation: if the source is a JPEG from a phone camera, ensure the rotation is respected (use `createImageBitmap(file, { imageOrientation: 'from-image' })` when available, otherwise document this as a known limitation).
-   - Transparent PNGs exported to JPEG: prefer WebP to preserve alpha; if falling back to JPEG, fill the canvas with a solid background (e.g. white) before drawing.
+CONTEXT:
+  When a new turn starts, `game.page.ts` receives a `newTurn` event, reads
+  `gameData.gameState.currentTurn` (a MarbleColor), finds the matching player in
+  `gameData.gameState.players`, and stores their name and color into Angular
+  signals (`newTurnName`, `newTurnColor`) which drive the banner overlay.
 
-6. **Verification**
-   - Manually test with: a 4000×3000 px JPEG > 5 MB, a 1024×1024 px PNG with transparency, a small 200×200 px WebP (must not be upscaled), and a non-image file (should show error).
-   - Confirm the request payload sent to `PATCH /api/auth/user/:id` always passes the server-side validator in [backend/src/auth/auth-router.ts:114-130](backend/src/auth/auth-router.ts#L114-L130).
+  The banner (`game.page.html` lines 58–69) currently shows:
+    [marble decoration] | "Nouveau Tour" / player-name | [marble decoration]
+
+  The `Player` type already has an optional `picture?: string` field (a base64
+  data URL). The board component already shows player pictures using this field
+  (with a color-div fallback when `picture` is absent).
+
+WHAT TO DO:
+  Show the player's profile picture inside the new-turn banner, falling back
+  gracefully to the existing marble decoration when no picture is available.
+
+  Steps:
+
+  1. `frontend/src/app/game/game.page.ts`
+     - Add a new signal: `newTurnPicture = signal<string | null>(null)`.
+     - When handling the `newTurn` event, set `newTurnPicture` to
+       `player.picture ?? null` alongside the existing name/color signals.
+     - Reset `newTurnPicture` to `null` when the banner is dismissed.
+
+  2. `frontend/src/app/game/game.page.html`
+     - Replace (or conditionally replace) one of the two `.new-turn-marble`
+       decorative elements with the player avatar when a picture is available:
+         @if (newTurnPicture()) {
+           <img class="new-turn-avatar" [src]="newTurnPicture()" alt="" />
+         } @else {
+           <div class="new-turn-marble" [class]="'ntm-' + newTurnColor()"></div>
+         }
+     - Keep the other `.new-turn-marble` on the opposite side for symmetry.
+
+  3. `frontend/src/app/game/game.page.scss`
+     - Add styles for `.new-turn-avatar`:
+       - Circular crop: `border-radius: 50%`, fixed size matching the marble
+         element (check the existing `.new-turn-marble` dimensions in the file).
+       - `object-fit: cover` to avoid distortion.
+       - A thin colored border using the current turn color (follow the existing
+         color-attribute pattern: `[attr.data-color]` is already on the overlay).
+       - No extra animation beyond what the parent banner already applies.
+
+  NOTE: Follow the same avatar-with-fallback pattern already used in
+  `board.component.html` (lines 20–24 and 154–158) to keep the approach
+  consistent across the game UI.
+
+================================================================================
