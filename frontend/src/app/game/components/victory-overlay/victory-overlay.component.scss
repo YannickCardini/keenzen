@@ -202,3 +202,30 @@ $bg-dark: #0f172a;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
+
+// ── Variante "Victory by Forfeit" ─────────────────────────────────
+// Ton plus sobre que la vraie victoire : argenté au lieu de doré,
+// sous-titre plus visible pour expliquer le contexte.
+
+$c-silver: #cbd5e1;
+
+.victory-card.by-default {
+  .victory-title {
+    color: $c-silver;
+    text-shadow: 0 0 24px rgba($c-silver, 0.5);
+    animation: titleGlowSilver 2.4s ease-in-out infinite;
+  }
+
+  .winner-subtitle {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: clamp(0.95rem, 2.2vw, 1.2rem);
+    text-transform: none;
+    letter-spacing: 0.04em;
+    font-style: italic;
+  }
+}
+
+@keyframes titleGlowSilver {
+  0%, 100% { text-shadow: 0 0 20px rgba($c-silver, 0.4), 0 0 40px rgba($c-silver, 0.15); }
+  50%       { text-shadow: 0 0 28px rgba($c-silver, 0.7), 0 0 56px rgba($c-silver, 0.3); }
+}

@@ -536,7 +536,7 @@ $colors: (
         width: calc(var(--square-size) * 0.5);
         height: calc(var(--square-size) * 0.5);
         border-radius: 50%;
-        background: rgba(0, 0, 0, 0.05);
+        background: rgba(0, 0, 0, 0.5);
         display: flex;
         justify-content: center;
         align-items: center;
@@ -653,13 +653,16 @@ $colors: (
 }
 
 @keyframes activeTurnPulse {
-    0%, 100% {
+
+    0%,
+    100% {
         box-shadow:
             0 0 0 2px var(--player-color),
             0 0 10px var(--player-glow),
             0 4px 8px rgba(0, 0, 0, 0.12);
         filter: brightness(1.02);
     }
+
     50% {
         box-shadow:
             0 0 0 2px var(--player-color),
@@ -670,8 +673,15 @@ $colors: (
 }
 
 @keyframes disconnectedPulse {
-    0%, 100% { outline-color: rgba(210, 70, 70, 0.2); }
-    50% { outline-color: rgba(210, 70, 70, 0.8); }
+
+    0%,
+    100% {
+        outline-color: rgba(210, 70, 70, 0.2);
+    }
+
+    50% {
+        outline-color: rgba(210, 70, 70, 0.8);
+    }
 }
 
 /* ==========================================================================
@@ -1442,5 +1452,7 @@ $colors: (
 }
 
 @keyframes panelSpin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }

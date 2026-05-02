@@ -36,6 +36,7 @@ export class GameStateService {
   data = signal<GameStateMessage | null>(null);
   isConnected = signal(false);
   winner = signal<MarbleColor | null>(null);
+  winReason = signal<'win' | 'win_by_default' | null>(null);
 
   // ── Identité du joueur local ──────────────────────────────────────────────
   /** Couleur du joueur humain local. null = mode spectateur (4 IA). */
@@ -361,6 +362,7 @@ export class GameStateService {
           if (msg.reason === 'abandoned') {
             this.gameAbandoned$.next();
           } else {
+            this.winReason.set(msg.reason === 'win_by_default' ? 'win_by_default' : 'win');
             this.winner.set(msg.winner);
           }
           break;
@@ -440,6 +442,7 @@ export class GameStateService {
   reset(): void {
     this.data.set(null);
     this.winner.set(null);
+    this.winReason.set(null);
     this.myPlayerColor.set(null);
     this.guestPlayerId.set(null);
     this.activeGameId.set(null);

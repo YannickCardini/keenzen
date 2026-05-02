@@ -10,14 +10,20 @@
   }
 
   <!-- Card centrale -->
-  <div class="victory-card">
-    <div class="trophy">{{ isWinner() ? '🏆' : '💀' }}</div>
+  <div class="victory-card" [class.by-default]="byDefault()">
+    <div class="trophy">{{ byDefault() ? '🏳️' : (isWinner() ? '🏆' : '💀') }}</div>
     <div class="victory-title">{{ isWinner() ? 'Victory!' : 'Defeat' }}</div>
     <div class="winner-row">
       <div class="winner-marble" [class]="'wm-' + color()"></div>
       <div class="winner-name">{{ name() }}</div>
     </div>
-    <div class="winner-subtitle">{{ isWinner() ? 'won the game!' : 'won the game.' }}</div>
+    <div class="winner-subtitle">
+      @if (byDefault()) {
+        All other players have left the game
+      } @else {
+        {{ isWinner() ? 'won the game!' : 'won the game.' }}
+      }
+    </div>
   </div>
 
 </div>

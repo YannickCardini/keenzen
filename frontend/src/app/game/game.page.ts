@@ -25,6 +25,7 @@ export class GamePage implements OnDestroy, AfterViewInit {
   showRules = signal(false);
   newTurnColor = signal<string>('');
   newTurnName = signal<string>('');
+  newTurnPicture = signal<string | null>(null);
 
   winnerName = computed(() => {
     const color = this.gameStateService.winner();
@@ -60,6 +61,7 @@ export class GamePage implements OnDestroy, AfterViewInit {
       const player = gameData.gameState.players.find(p => p.color === currentTurn);
       this.newTurnColor.set(currentTurn);
       this.newTurnName.set(player?.name ?? currentTurn);
+      this.newTurnPicture.set(player?.picture ?? null);
       if (player?.cardsLeft && player.cardsLeft > 0) {
         this.showNewTurnBanner.set(true);
         if (this.gameStateService.isMyTurn()) {
@@ -73,6 +75,7 @@ export class GamePage implements OnDestroy, AfterViewInit {
       if (this.newTurnTimeout) clearTimeout(this.newTurnTimeout);
       this.newTurnTimeout = setTimeout(() => {
         this.showNewTurnBanner.set(false);
+        this.newTurnPicture.set(null);
       }, NEW_TURN_BANNER_DURATION_MS);
     });
   }

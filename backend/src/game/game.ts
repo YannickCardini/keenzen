@@ -316,10 +316,43 @@ export class Game {
 
     /** Abort the game if no human players are still connected. */
     private checkAbort(): void {
-        const connectedHumans = this.players.filter(p => p.isHuman && p.isConnected).length;
-        if (connectedHumans === 0) {
+        const humanPlayers = this.players.filter(p => p.isHuman);
+        const connectedHumans = humanPlayers.filter(p => p.isConnected);
+        if (connectedHumans.length === 0) {
             this.abortGame();
+            return;
         }
+        if (connectedHumans.length === 1 && humanPlayers.length > 1) {
+            this.declareLastConnectedWinner(connectedHumans[0]!);
+        }
+    }
+
+    /** End the game with a win for the last remaining connected human player. */
+    private declareLastConnectedWinner(winner: Player): void {
+        if (this.gameFinished) return;
+        this.gameFinished = true;
+        this.aborted = true;
+
+        console.log(`🏆 ${winner.name} (${winner.color}) wins — last connected player`);
+
+        this.messenger.send({ type: 'gameEnded', winner: winner.color, reason: 'win_by_default' });
+
+        if (this.pendingHumanActionResolve) {
+            const currentPlayer = this.players[this.currentPlayerIndex]!;
+            this.pendingHumanActionResolve({
+                type: 'pass', from: 0, to: 0,
+                cardPlayed: null, playerColor: currentPlayer.color,
+            });
+            this.pendingHumanActionResolve = null;
+        }
+        this.pendingAnimationResolve?.();
+        this.pendingAnimationResolve = null;
+
+        GameRegistry.delete(this.id);
+
+        this.applyEndGamePoints(winner.color).catch(err =>
+            console.error('❌ Failed to update points after game end:', err)
+        );
     }
 
     /** Stop the game immediately and clean up. Idempotent. */

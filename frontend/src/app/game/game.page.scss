@@ -381,6 +381,11 @@ $turn-colors: (
                 background: radial-gradient(circle at 35% 35%, color.adjust($hex, $lightness: 15%), $hex 60%, color.adjust($hex, $lightness: -15%));
                 box-shadow: 0 0 16px rgba($hex, 0.7), 0 3px 8px rgba(0, 0, 0, 0.4);
             }
+
+            .new-turn-avatar {
+                border-color: $hex;
+                box-shadow: 0 0 16px rgba($hex, 0.7), 0 3px 8px rgba(0, 0, 0, 0.4);
+            }
         }
     }
 }
@@ -405,15 +410,26 @@ $turn-colors: (
 
 .new-turn-banner {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 20px;
-    padding: 18px 36px;
+    justify-content: center;
+    gap: 18px;
+    padding: 28px 48px 24px;
     background: rgba(10, 18, 40, 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 60px;
+    border-radius: 28px;
     animation: bannerSlide 2.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.new-turn-avatar-wrapper {
+    position: relative;
+    width: 112px;
+    height: 112px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 @keyframes bannerSlide {
@@ -442,12 +458,24 @@ $turn-colors: (
     }
 }
 
-/* Billes décoratives du banner */
+/* Avatar du joueur dans le banner */
+.new-turn-avatar {
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 3px solid rgba(255, 255, 255, 0.4);
+    animation: bannerMarbleSpin 2.5s ease-in-out forwards;
+}
+
+/* Bille décorative du banner (fallback quand pas d'avatar) */
 .new-turn-marble {
-    width: 32px;
-    height: 32px;
+    width: 112px;
+    height: 112px;
     border-radius: 50%;
     flex-shrink: 0;
+    position: relative;
     animation: bannerMarbleSpin 2.5s ease-in-out forwards;
 
     &::after {
@@ -484,19 +512,19 @@ $turn-colors: (
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
 }
 
 .new-turn-label {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 600;
-    letter-spacing: 0.2em;
+    letter-spacing: 0.25em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.55);
 }
 
 .new-turn-name {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     font-weight: 800;
     letter-spacing: 0.05em;
     color: white;

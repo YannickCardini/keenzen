@@ -155,7 +155,7 @@ export interface ActionRejectedMessage {
 export interface GameEndedMessage {
   type: 'gameEnded';
   winner: MarbleColor | null;
-  reason?: 'win' | 'abandoned';
+  reason?: 'win' | 'win_by_default' | 'abandoned';
 }
 
 /**

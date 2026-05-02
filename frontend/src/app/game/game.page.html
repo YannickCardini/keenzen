@@ -58,12 +58,17 @@
     @if (showNewTurnBanner()) {
     <div class="new-turn-overlay" [attr.data-color]="newTurnColor()">
       <div class="new-turn-banner">
-        <div class="new-turn-marble" [class]="'ntm-' + newTurnColor()"></div>
+        <div class="new-turn-avatar-wrapper">
+          @if (newTurnPicture(); as pic) {
+            <img class="new-turn-avatar" [src]="pic" alt="" referrerpolicy="no-referrer" />
+          } @else {
+            <div class="new-turn-marble" [class]="'ntm-' + newTurnColor()"></div>
+          }
+        </div>
         <div class="new-turn-text">
           <span class="new-turn-label">Nouveau Tour</span>
           <span class="new-turn-name">{{ newTurnName() }}</span>
         </div>
-        <div class="new-turn-marble" [class]="'ntm-' + newTurnColor()"></div>
       </div>
     </div>
     }
@@ -88,6 +93,7 @@
     [color]="winnerColor"
     [name]="winnerName()"
     [isWinner]="gameStateService.myPlayerColor() === winnerColor || gameStateService.myPlayerColor() === null"
+    [byDefault]="gameStateService.winReason() === 'win_by_default'"
   ></app-victory-overlay>
   }
 
