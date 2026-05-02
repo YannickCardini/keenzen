@@ -1,4 +1,12 @@
 {
+  "routes": [
+    {
+      "route": "/index.html",
+      "headers": {
+        "cache-control": "no-store"
+      }
+    }
+  ],
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": ["/assets/*.{png,jpg,gif,svg}", "/css/*"]
