@@ -1,10 +1,12 @@
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
+import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { environment } from 'src/environments/environment';
 
 interface LeaderboardEntry {
+  id: string;
   name: string;
   picture: string;
   points: number;
@@ -20,6 +22,7 @@ interface LeaderboardEntry {
 export class LeaderboardPage implements OnInit {
   private http = inject(HttpClient);
   private location = inject(Location);
+  private router = inject(Router);
 
   entries = signal<LeaderboardEntry[]>([]);
   loading = signal(true);
@@ -39,5 +42,10 @@ export class LeaderboardPage implements OnInit {
 
   goBack(): void {
     this.location.back();
+  }
+
+  openProfile(id: string): void {
+    if (!id) return;
+    void this.router.navigate(['/profile', id]);
   }
 }

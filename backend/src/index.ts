@@ -12,12 +12,14 @@ import { GameRegistry } from './session/game-registry.js';
 import type { ClientMessage } from '@mercury/shared';
 import { MultiWsMessenger } from './game/game-messenger.js';
 import authRouter from './auth/auth-router.js';
+import messagesRouter from './messages/messages-router.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '4mb' }));
 
 app.use('/api/auth', authRouter);
+app.use('/api/messages', messagesRouter);
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server });

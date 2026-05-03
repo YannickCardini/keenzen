@@ -19,7 +19,7 @@
     } @else {
       <ol class="lb-list">
         @for (entry of entries(); track entry.ranking; let i = $index) {
-          <li class="lb-row" [class.lb-row--top3]="i < 3">
+          <li class="lb-row" [class.lb-row--top3]="i < 3" (click)="openProfile(entry.id)" role="button" tabindex="0" (keydown.enter)="openProfile(entry.id)">
             <span class="lb-rank" [class.lb-rank--gold]="i === 0" [class.lb-rank--silver]="i === 1" [class.lb-rank--bronze]="i === 2">
               {{ i + 1 }}
             </span>

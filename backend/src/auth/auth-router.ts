@@ -6,6 +6,23 @@ const router = Router();
 
 const googleClient = new OAuth2Client();
 
+/**
+ * Verifies a Google id-token against the configured audiences and returns the
+ * authenticated user's id (`sub`). Returns null if the token is missing or
+ * invalid. Exposed for reuse by other routers (e.g. messages).
+ */
+export async function verifyGoogleIdToken(idToken: string | undefined): Promise<string | null> {
+    if (!idToken) return null;
+    try {
+        const audiences = [process.env['GOOGLE_AUDIENCE_WEB']!, process.env['GOOGLE_AUDIENCE_ANDROID']!];
+        const ticket = await googleClient.verifyIdToken({ idToken, audience: audiences });
+        const payload = ticket.getPayload();
+        return payload?.sub ?? null;
+    } catch {
+        return null;
+    }
+}
+
 interface UserDoc {
     id: string;
     email: string;
@@ -172,6 +189,7 @@ router.get('/user/:id', async (req: Request, res: Response) => {
             points: resource.points,
             ranking: resource.ranking,
             createdAt: resource.createdAt,
+            lastLogin: resource.lastLogin,
         });
     } catch (err) {
         console.error('❌ Cosmos DB error (GET /user/:id):', err);
@@ -223,8 +241,8 @@ router.get('/leaderboard', async (_req: Request, res: Response) => {
     try {
         const container = await getUsersContainer();
         const { resources } = await container.items
-            .query<Pick<UserDoc, 'name' | 'picture' | 'points' | 'ranking'>>(
-                'SELECT TOP 100 c.name, c.picture, c.points, c.ranking FROM c ORDER BY c.points DESC'
+            .query<Pick<UserDoc, 'id' | 'name' | 'picture' | 'points' | 'ranking'>>(
+                'SELECT TOP 100 c.id, c.name, c.picture, c.ranking, c.points FROM c ORDER BY c.points DESC'
             )
             .fetchAll();
         res.json(resources);

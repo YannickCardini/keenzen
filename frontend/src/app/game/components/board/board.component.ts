@@ -48,6 +48,7 @@ export interface ProfilePanelState {
   data: ProfileData | null;
   loading: boolean;
   isGuest: boolean;
+  userId: string | null;
   x: number;
   y: number;
 }
@@ -861,7 +862,7 @@ export class BoardComponent implements OnInit, OnDestroy {
     if (y < 8) y = 8;
 
     const isGuest = !player?.userId;
-    this.profilePanel.set({ color, data: null, loading: !isGuest, isGuest, x, y });
+    this.profilePanel.set({ color, data: null, loading: !isGuest, isGuest, userId: player?.userId ?? null, x, y });
 
     if (player?.userId) {
       firstValueFrom(
@@ -895,6 +896,14 @@ export class BoardComponent implements OnInit, OnDestroy {
   goToLeaderboard(): void {
     const url = this.router.serializeUrl(
       this.router.createUrlTree(['/leaderboard'])
+    );
+    window.open(url, '_blank');
+  }
+
+  viewProfile(userId: string | null): void {
+    if (!userId) return;
+    const url = this.router.serializeUrl(
+      this.router.createUrlTree(['/profile', userId])
     );
     window.open(url, '_blank');
   }

@@ -1,96 +1,257 @@
 ================================================================================
 MERCURY — TODO LIST
 ================================================================================
-
---------------------------------------------------------------------------------
-TASK 1 — Declare the last connected player winner when all others disconnect
---------------------------------------------------------------------------------
-
-CONTEXT:
-  When a player's WebSocket closes and does not reconnect within 180 seconds,
-  `game-messenger.ts` calls `onPermanentDisconnect(color)`, which in turn calls
-  `game.ts:markDisconnected(color)`. That method sets `player.isConnected = false`
-  and calls `checkAbort()`.
-
-  Currently, `checkAbort()` (game.ts) counts connected humans and only aborts the
-  game (reason: 'abandoned') if that count reaches 0. There is no special handling
-  for the case where exactly 1 human player remains connected.
-
-WHAT TO DO:
-  In `backend/src/game/game.ts`, update `checkAbort()` so that when the number of
-  connected human players drops to 1, the game ends with a win for that player
-  instead of continuing or aborting as 'abandoned'.
-
-  Steps:
-  1. After computing `connectedHumans` in `checkAbort()`, add a branch:
-     if `connectedHumans === 1` AND total human players > 1 (i.e. at least one
-     has permanently disconnected), find the single remaining connected human
-     player and declare them the winner.
-
-  2. Reuse the existing win-end flow used at the bottom of the game loop:
-     - Call `applyEndGamePoints(winner.color)` so scoring is applied correctly
-       (winner: +3 pts; already-penalized disconnected players keep their -2 and
-       are skipped by the scoring guard on `penalizedUserIds`).
-     - Broadcast `gameEnded` with `reason: 'win'` and the winner's color.
-     - Set `gameFinished = true` and `aborted = true` to exit the game loop.
-     - Remove the game from the registry.
-
-  3. Do NOT trigger this path if only bots remain (i.e. the single remaining
-     "human" must have `isHuman === true && isConnected === true`).
-
-  4. No frontend changes are needed; the existing `gameEnded` handler already
-     processes `reason: 'win'` correctly.
-
---------------------------------------------------------------------------------
-TASK 2 — Display the player's profile picture in the new-turn banner
---------------------------------------------------------------------------------
-
-CONTEXT:
-  When a new turn starts, `game.page.ts` receives a `newTurn` event, reads
-  `gameData.gameState.currentTurn` (a MarbleColor), finds the matching player in
-  `gameData.gameState.players`, and stores their name and color into Angular
-  signals (`newTurnName`, `newTurnColor`) which drive the banner overlay.
-
-  The banner (`game.page.html` lines 58–69) currently shows:
-    [marble decoration] | "Nouveau Tour" / player-name | [marble decoration]
-
-  The `Player` type already has an optional `picture?: string` field (a base64
-  data URL). The board component already shows player pictures using this field
-  (with a color-div fallback when `picture` is absent).
-
-WHAT TO DO:
-  Show the player's profile picture inside the new-turn banner, falling back
-  gracefully to the existing marble decoration when no picture is available.
-
-  Steps:
-
-  1. `frontend/src/app/game/game.page.ts`
-     - Add a new signal: `newTurnPicture = signal<string | null>(null)`.
-     - When handling the `newTurn` event, set `newTurnPicture` to
-       `player.picture ?? null` alongside the existing name/color signals.
-     - Reset `newTurnPicture` to `null` when the banner is dismissed.
-
-  2. `frontend/src/app/game/game.page.html`
-     - Replace (or conditionally replace) one of the two `.new-turn-marble`
-       decorative elements with the player avatar when a picture is available:
-         @if (newTurnPicture()) {
-           <img class="new-turn-avatar" [src]="newTurnPicture()" alt="" />
-         } @else {
-           <div class="new-turn-marble" [class]="'ntm-' + newTurnColor()"></div>
-         }
-     - Keep the other `.new-turn-marble` on the opposite side for symmetry.
-
-  3. `frontend/src/app/game/game.page.scss`
-     - Add styles for `.new-turn-avatar`:
-       - Circular crop: `border-radius: 50%`, fixed size matching the marble
-         element (check the existing `.new-turn-marble` dimensions in the file).
-       - `object-fit: cover` to avoid distortion.
-       - A thin colored border using the current turn color (follow the existing
-         color-attribute pattern: `[attr.data-color]` is already on the overlay).
-       - No extra animation beyond what the parent banner already applies.
-
-  NOTE: Follow the same avatar-with-fallback pattern already used in
-  `board.component.html` (lines 20–24 and 154–158) to keep the approach
-  consistent across the game UI.
+Each task below is self-contained. Codebase paths are given as hints; verify
+exact locations before editing. Do not implement multiple tasks at once unless
+explicitly requested.
 
 ================================================================================
+TASK 1 — Public Player Profile Page
+================================================================================
+Goal: Create a new page that displays the public profile of any player.
+
+Routing & access points:
+  - New route: `/profile/:id` (add it in `frontend/src/app/app.routes.ts`).
+  - Entry point A — Leaderboard: in `frontend/src/app/leaderboard/leaderboard.page.html`,
+    each `<li class="lb-row">` must become clickable and navigate to
+    `/profile/<userId>`. The leaderboard endpoint currently does not return the
+    user `id`; update `GET /api/auth/leaderboard` in
+    `backend/src/auth/auth-router.ts` to also include `c.id` in its SELECT, and
+    extend the `LeaderboardEntry` interface in `leaderboard.page.ts` accordingly.
+  - Entry point B — In-game: in
+    `frontend/src/app/game/components/board/board.component.html` (around
+    line 174), the "View leaderboard" button inside the `profile-panel` must be
+    replaced with a "View profile" button that opens
+    `/profile/<userId>` in a NEW BROWSER TAB (use `window.open(url, '_blank')`).
+    The userId is the one already loaded by the panel (`panel.data` /
+    `loadProfile` logic in `board.component.ts`).
+
+Page contents (display only — no editing):
+  - Profile picture, displayed at its real/native size (do NOT crop or scale
+    down; only constrain with a sensible max-width so the layout stays usable
+    on small screens).
+  - Player name.
+  - Total points.
+  - Current ranking (rank number).
+  - "Member since" date — derived from `createdAt`.
+  - "Last seen" date — derived from `lastLogin`. NOTE: `lastLogin` is NOT yet
+    exposed by `GET /api/auth/user/:id`; add it to that endpoint's response in
+    `backend/src/auth/auth-router.ts`.
+  - A "Send private message" button (see sub-task below).
+
+Private messaging (keep it as simple as possible):
+  - Backend:
+      * Create a new Cosmos DB container `messages` (mirror the pattern used
+        for `getUsersContainer` in `backend/src/db.ts`).
+      * Add endpoints in a new router `backend/src/messages/messages-router.ts`:
+          - `POST /api/messages` — body `{ toUserId, text }`, requires the
+            sender to be authenticated (reuse the existing Google id-token
+            validation logic from `auth-router.ts`; factor it into a helper if
+            needed). Reject if `text` is empty or longer than e.g. 500 chars.
+          - `GET /api/messages/inbox` — returns the authenticated user's
+            received messages, newest first.
+      * Wire the router in `backend/src/index.ts`.
+  - Frontend:
+      * On the profile page, a "Send message" button opens a small modal with
+        a textarea + send button. Send via the new POST endpoint. Show a
+        success toast / inline confirmation; show a generic error otherwise.
+      * No inbox UI is required for this task (the inbox is handled in
+        Task 2); only the send flow needs to work end-to-end here.
+  - Guests (not signed in) should see the "Send message" button disabled with
+    a tooltip "Sign in to send a message".
+
+Acceptance:
+  - Clicking a row on the leaderboard opens that player's profile page.
+  - Clicking "View profile" inside the in-game profile panel opens the
+    profile in a new tab.
+  - Profile page renders all listed fields and lets a signed-in user send a
+    message that is persisted in Cosmos DB.
+
+================================================================================
+TASK 2 — Inbox (boîte de réception)
+================================================================================
+Depends on: Task 1 (the `messages` container and `GET /api/messages/inbox`
+endpoint must already exist).
+
+Goal: Give signed-in users a way to read the private messages they have
+received via the messaging system introduced in Task 1.
+
+Implementation is intentionally left open. Any approach is acceptable as long
+as the result satisfies these three criteria:
+  1. Simple — minimal UI, no over-engineering, no features beyond reading
+     received messages (and ideally seeing which are unread).
+  2. Ergonomic — the inbox must be easy to find and easy to use; opening it,
+     reading a message, and going back should feel obvious.
+  3. Harmonious — visual style, spacing, colors, typography, and animations
+     must match the rest of the app (re-use existing components / SCSS
+     patterns from the home page, leaderboard, and modals rather than
+     introducing new visual idioms).
+
+Suggested directions (non-binding — pick whatever fits best):
+  - A dedicated `/inbox` route, or a modal opened from the user menu / avatar.
+  - An unread-count badge somewhere visible (e.g. on the avatar).
+  - A list of messages with sender name, sender avatar, date, and body.
+  - Mark-as-read behaviour can be implicit (on open) or explicit; whichever
+    is simpler is fine for v1.
+
+Backend additions are allowed if needed (e.g. an `unreadCount` field, or a
+`PATCH /api/messages/:id/read` endpoint), but only add what the chosen UX
+actually requires. Guests have no inbox.
+
+Acceptance:
+  - A signed-in user who has received messages can open the inbox and read
+    them, sorted newest first.
+  - The inbox visually fits in with the rest of the app.
+  - Guests cannot access the inbox.
+
+================================================================================
+TASK 3 — Custom Game (currently shown as "Coming soon")
+================================================================================
+Goal: Implement the Custom Game flow. The button already exists in
+`frontend/src/app/home/home.page.html` (around line 87) but is disabled.
+
+Sub-task 3.1 — Frontend UI
+  - Remove `disabled` and `title="Coming soon"` from the Custom Game button.
+    Bind `(click)` to a new `openCustomGame()` method in
+    `frontend/src/app/home/home.page.ts`.
+  - Create a Custom Game modal (similar visual style to the existing matchmaking
+    modal, see lines 312–366 of `home.page.html`) containing:
+      a) A unique 6-character alphanumeric "room code" (generated by the
+         backend on creation), prominently displayed with a copy-to-clipboard
+         button. Guests can use this code to join WITHOUT an account.
+      b) A list of currently joined players (up to 4), styled like the
+         matchmaking slots.
+      c) A "Join with code" input INSIDE this same modal (not on the home
+         page). After clicking the Custom Game button, the user can either
+         create a new room OR paste an existing code to join one. Joining
+         via code does NOT require authentication; reuse the same guest-name
+         flow as matchmaking (`generateGuestName` in
+         `frontend/src/app/shared/guest-name.ts`).
+      d) An invite section showing all signed-up players from the DB:
+            - Reuse the leaderboard list visual (`leaderboard.page.html`).
+            - Sorted by `points` DESC.
+            - With a search bar that filters by `name` (case-insensitive,
+              client-side filtering is acceptable).
+            - Each row has an "Invite" button. Clicking "Invite" simply
+              sends a PRIVATE MESSAGE to that player (reusing the messaging
+              system from Task 1 — `POST /api/messages`). The message body
+              is in ENGLISH and reads roughly:
+                "Hi! Would you be interested in joining my custom game?
+                 Enter the following code to join: <ROOM_CODE>"
+              For v1 we keep it simple — no auto-join, no deep link. A
+              future iteration may embed a direct join link in this
+              message; do NOT implement that now.
+      e) A "Start game" button visible only to the room creator.
+
+Sub-task 3.2 — Backend
+  - Create a `CustomGameManager` in `backend/src/session/` modelled on
+    `MatchmakingManager` (`backend/src/session/matchmaking-manager.ts`) but
+    keyed by a room code instead of a single global queue:
+      * `createRoom(creatorWs, creatorInfo)` → returns `{ code }`.
+      * `joinRoom(code, ws, playerInfo)` → assigns next free color
+        (red → green → blue → orange).
+      * `startRoom(code, requesterWs)` → only the creator can call this.
+        - If the room has 4 players: start the game immediately (same flow
+          as `MatchmakingManager` — instantiate `Game`, register in
+          `GameRegistry`).
+        - If the room has fewer than 4 players: forward the existing players
+          into the public matchmaking queue. They should be added to the
+          current `MatchmakingManager` session if one is pending; otherwise a
+          new pending session must be created. Preserve their colors when
+          possible; reassign if there's a conflict.
+  - Wire WebSocket message types (extend the existing protocol used by
+    `game-state.service.ts`):
+      * `createCustomRoom`, `joinCustomRoom`, `startCustomRoom`,
+        `customRoomStatus` (broadcast like `matchmakingStatus`).
+
+Sub-task 3.3 — Edge cases
+  - Reject duplicate tab joins from the same browser (mirror the `browserId`
+    check in `MatchmakingManager.joinQueue`).
+  - If the creator disconnects before starting, the room is destroyed and
+    remaining players are notified.
+  - Codes expire after e.g. 30 minutes of inactivity.
+
+Acceptance:
+  - A signed-in user can open the Custom Game modal, see a generated code,
+    and copy it.
+  - From the same modal, another user (signed in OR guest) can paste a code
+    and join the room.
+  - Inviting a DB user from the search list delivers an English private
+    message containing the room code, visible in that user's inbox
+    (Task 1 + Task 2 dependency).
+  - Pressing "Start" with 4 players begins a normal game.
+  - Pressing "Start" with <4 players merges everyone into public matchmaking.
+
+================================================================================
+TASK 4 — Clean up "À propos" / Info modal
+================================================================================
+File: `frontend/src/app/home/home.page.html`
+Section: "SETTINGS / INFO MODAL" (lines ~234–309).
+
+Remove:
+  - The entire `<div class="social-section">` block (lines ~281–306),
+    including:
+      * The `<p class="social-title">Retrouvez-nous</p>` text.
+      * All three social `<a class="social-btn">` buttons (GitHub, Discord,
+        Twitter/X).
+  - Any orphan SCSS rules in `home.page.scss` that targeted those classes
+    exclusively (`.social-section`, `.social-title`, `.social-row`,
+    `.social-btn`, `.social-btn.discord`, `.social-btn.twitter`). Leave
+    shared rules (e.g. `.modal-header`) untouched.
+
+Acceptance: opening the Info modal shows Version / Contact / Développeur
+and the "Game Rules" button only — no social section.
+
+================================================================================
+TASK 5 — Update Game Rules text (start-square restriction)
+================================================================================
+File: `frontend/src/app/shared/game-rules-modal.component.html`
+Location: the `<li class="rules-key">` with the blue dot, around lines 96–99.
+
+Replace the current text:
+    "Home lane order: Marbles fill from the back slot forward — you cannot
+     jump over your own marbles inside the lane."
+
+With a new bullet that explains the start-square forward-first rule:
+
+    Title (bold): "Start-square restriction"
+    Body: "A marble that has just entered the board on its start square
+           (via an Ace or a King) must first move FORWARD by any number of
+           squares before it is allowed to move backward (via a 4) or be
+           swapped (via a Jack)."
+
+Keep the same `<li class="rules-key">` structure and the
+`rules-key-dot--blue` class. Do NOT change other bullets.
+
+Acceptance: opening the Rules modal shows the new bullet in place of the
+"Home lane order" one; layout is unchanged.
+
+================================================================================
+TASK 6 — Black border around in-game player avatar
+================================================================================
+Goal: Improve visibility of the player profile picture inside the player card
+during a game. Some pictures are too close in color to the surrounding UI and
+visually disappear.
+
+Scope (IMPORTANT — only this one location):
+  - Apply the border ONLY inside the in-game `player-card` avatar (the
+    `.avatar-ring` / `.avatar-img` element used in
+    `frontend/src/app/game/components/board/board.component.html` lines
+    16–25).
+  - DO NOT modify the avatar shown in the "new turn" banner. Verify by
+    grepping for the new-turn / current-turn banner component (look in
+    `frontend/src/app/game/components/table/` and any "banner"/"turn"
+    related templates) and explicitly leaving its avatar styling untouched.
+
+Implementation:
+  - In `frontend/src/app/game/components/board/board.component.scss`,
+    locate the `.player-card` block (starts at line ~521) and add a
+    1–2px solid black border to the `.avatar-img` and the
+    `.avatar-color` fallback (so both image and color-fallback variants
+    are bordered consistently). Keep the existing border-radius so the
+    border follows the circular shape.
+
+Acceptance:
+  - In a running game, every player card shows its avatar with a clear
+    black outline.
+  - The "new turn" banner avatar is visually unchanged.

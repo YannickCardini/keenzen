@@ -1,0 +1,116 @@
+<div class="pf-wrap">
+  <div class="pf-card">
+    <div class="pf-header">
+      <button class="pf-back" (click)="goBack()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+        Back
+      </button>
+      <h1 class="pf-title">Profile</h1>
+    </div>
+
+    @if (loading()) {
+      <div class="pf-state">
+        <div class="pf-spinner"></div>
+      </div>
+    } @else if (error()) {
+      <div class="pf-state pf-state--error">{{ error() }}</div>
+    } @else if (profile(); as p) {
+      <div class="pf-body">
+        @if (p.picture) {
+          <img class="pf-photo" [src]="p.picture" [alt]="p.name" referrerpolicy="no-referrer" />
+        } @else {
+          <div class="pf-photo pf-photo--fallback"></div>
+        }
+
+        <h2 class="pf-name">{{ p.name }}</h2>
+
+        <div class="pf-stats">
+          <div class="pf-stat">
+            <span class="pf-stat-value">{{ p.points }}</span>
+            <span class="pf-stat-label">points</span>
+          </div>
+          @if (p.ranking > 0) {
+            <div class="pf-stat">
+              <span class="pf-stat-value">#{{ p.ranking }}</span>
+              <span class="pf-stat-label">ranking</span>
+            </div>
+          }
+        </div>
+
+        <dl class="pf-meta">
+          <div class="pf-meta-row">
+            <dt>Member since</dt>
+            <dd>{{ formatDate(p.createdAt) }}</dd>
+          </div>
+          <div class="pf-meta-row">
+            <dt>Last seen</dt>
+            <dd>{{ formatLastSeen(p.lastLogin) }}</dd>
+          </div>
+        </dl>
+
+        @if (!isSelf()) {
+          <button
+            class="pf-send-btn"
+            [disabled]="!canSendMessage()"
+            [title]="canSendMessage() ? '' : 'Sign in to send a message'"
+            (click)="openSendModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 2L11 13"></path>
+              <path d="M22 2l-7 20-4-9-9-4 20-7z"></path>
+            </svg>
+            <span>Send private message</span>
+          </button>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- ══════════════ SEND MESSAGE MODAL ══════════════ -->
+  <div class="modal-overlay" [class.active]="showSendModal()" (click)="closeSendModal()">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <button class="modal-close" (click)="closeSendModal()" [disabled]="sending()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
+
+      <div class="modal-header">
+        <h2 class="modal-title">Send message</h2>
+        @if (profile(); as p) {
+          <p class="modal-subtitle">to {{ p.name }}</p>
+        }
+      </div>
+
+      <textarea
+        class="msg-textarea"
+        [ngModel]="messageText()"
+        (ngModelChange)="messageText.set($event)"
+        [maxlength]="maxLength"
+        [disabled]="sending() || sendStatus() === 'success'"
+        placeholder="Write your message..."
+        rows="5"></textarea>
+
+      <div class="msg-counter">{{ messageText().length }} / {{ maxLength }}</div>
+
+      @if (sendStatus() === 'success') {
+        <div class="msg-feedback msg-feedback--ok">Message sent.</div>
+      } @else if (sendStatus() === 'error') {
+        <div class="msg-feedback msg-feedback--err">{{ sendError() }}</div>
+      }
+
+      <button
+        class="msg-send-btn"
+        [disabled]="sending() || messageText().trim().length === 0 || sendStatus() === 'success'"
+        (click)="sendMessage()">
+        @if (sending()) {
+          <span class="msg-spinner"></span>
+          <span>Sending…</span>
+        } @else {
+          <span>Send</span>
+        }
+      </button>
+    </div>
+  </div>
+</div>

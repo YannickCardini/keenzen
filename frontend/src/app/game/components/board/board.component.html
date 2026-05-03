@@ -170,8 +170,8 @@
         </div>
       </div>
       <div class="profile-panel__since">{{ computeMemberSince(data.createdAt) }}</div>
-      @if (isWeb) {
-        <button class="profile-panel__leaderboard-btn" (click)="goToLeaderboard()">View leaderboard</button>
+      @if (isWeb && panel.userId) {
+        <button class="profile-panel__leaderboard-btn" (click)="viewProfile(panel.userId)">View profile</button>
       }
     } @else {
       <div class="profile-panel__error">Could not load profile</div>

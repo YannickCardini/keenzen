@@ -27,6 +27,20 @@ export async function getUsersContainer(): Promise<Container> {
     return container;
 }
 
+let messagesContainer: Container | null = null;
+
+export async function getMessagesContainer(): Promise<Container> {
+    if (messagesContainer) return messagesContainer;
+
+    const { database } = await getClient().databases.createIfNotExists({ id: 'mercury-db' });
+    const { container } = await database.containers.createIfNotExists({
+        id: 'messages',
+        partitionKey: { paths: ['/toUserId'] },
+    });
+    messagesContainer = container;
+    return container;
+}
+
 export async function updateUserPoints(userId: string, delta: number): Promise<void> {
     const container = await getUsersContainer();
     const ops: PatchOperation[] = [{ op: 'incr', path: '/points', value: delta }];

@@ -20,4 +20,8 @@ export const routes: Routes = [
     path: 'leaderboard',
     loadComponent: () => import('./leaderboard/leaderboard.page').then(m => m.LeaderboardPage)
   },
+  {
+    path: 'profile/:id',
+    loadComponent: () => import('./profile/profile.page').then(m => m.ProfilePage)
+  },
 ];

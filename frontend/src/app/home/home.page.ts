@@ -1,9 +1,10 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 import { GameRulesModalComponent } from '../shared/game-rules-modal.component';
-import { Subscription, take } from 'rxjs';
+import { Subscription, firstValueFrom, take } from 'rxjs';
 import { version } from '../../../../package.json';
 import { GameStateService } from '../game/services/game-state.service';
 import { TabLockService } from '../game/services/tab-lock.service';
@@ -12,6 +13,27 @@ import type { MarbleColor } from '@mercury/shared';
 import { environment } from 'src/environments/environment';
 import { generateGuestName } from '../shared/guest-name';
 import { normalizeProfileImage } from '../services/image-utils';
+
+interface ThreadSummary {
+  peerId: string;
+  peerName: string;
+  peerPicture: string;
+  lastMessage: { text: string; createdAt: string; fromMe: boolean };
+  unreadCount: number;
+}
+
+interface ThreadMessage {
+  id: string;
+  fromUserId: string;
+  fromName: string;
+  fromPicture: string;
+  toUserId: string;
+  toName: string;
+  toPicture: string;
+  text: string;
+  createdAt: string;
+  read: boolean;
+}
 
 @Component({
   selector: 'app-home',
@@ -57,6 +79,27 @@ export class HomePage implements OnInit, OnDestroy {
   loginError = false;
   loginErrorMessage = '';
 
+  // ── Inbox state ────────────────────────────────────────────────────────────
+  showInbox = false;
+  inboxView: 'threads' | 'thread' = 'threads';
+  threads: ThreadSummary[] = [];
+  threadsLoading = false;
+  inboxError = '';
+  unreadCount = 0;
+
+  // Active thread (when inboxView === 'thread')
+  currentPeer: { id: string; name: string; picture: string } | null = null;
+  currentMessages: ThreadMessage[] = [];
+  threadLoading = false;
+  composerText = '';
+  sending = false;
+  readonly composerMaxLength = 500;
+
+  @ViewChild('threadScroll') threadScroll?: ElementRef<HTMLDivElement>;
+
+  private http = inject(HttpClient);
+  private userSub: Subscription | null = null;
+
   constructor(
     private router: Router,
     private gameStateService: GameStateService,
@@ -80,12 +123,23 @@ export class HomePage implements OnInit, OnDestroy {
     this.updateErrorSub = this.auth.updateError$.subscribe(msg => {
       this.editError = msg;
     });
+    this.userSub = this.auth.user$.subscribe(user => {
+      if (user) {
+        void this.refreshUnreadCount();
+      } else {
+        this.unreadCount = 0;
+        this.threads = [];
+        this.currentMessages = [];
+        this.currentPeer = null;
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.cleanupMatchmaking();
     this.loginErrorSub?.unsubscribe();
     this.updateErrorSub?.unsubscribe();
+    this.userSub?.unsubscribe();
   }
 
   openLogin() { this.showLogin = true; }
@@ -227,5 +281,205 @@ export class HomePage implements OnInit, OnDestroy {
     this.matchmakingSub = null;
     this.gameStartSub = null;
     this.connectionErrorSub = null;
+  }
+
+  // ── Inbox ──────────────────────────────────────────────────────────────────
+
+  private authHeaders(): { Authorization: string } | null {
+    const idToken = this.auth.getIdToken();
+    return idToken ? { Authorization: `Bearer ${idToken}` } : null;
+  }
+
+  private async refreshUnreadCount(): Promise<void> {
+    const headers = this.authHeaders();
+    if (!headers) {
+      this.unreadCount = 0;
+      return;
+    }
+    try {
+      const res = await firstValueFrom(
+        this.http.get<{ count: number }>(`${environment.apiUrl}/api/messages/unread-count`, { headers })
+      );
+      this.unreadCount = res.count ?? 0;
+    } catch {
+      // Silently ignore — the badge just won't appear.
+    }
+  }
+
+  async openInbox(): Promise<void> {
+    if (!this.auth.user$.getValue()) return;
+    this.showInbox = true;
+    this.inboxView = 'threads';
+    this.currentPeer = null;
+    this.currentMessages = [];
+    void this.loadThreads();
+  }
+
+  private async loadThreads(): Promise<void> {
+    const headers = this.authHeaders();
+    if (!headers) {
+      this.inboxError = 'Please sign in again to view your messages.';
+      this.threadsLoading = false;
+      return;
+    }
+    this.inboxError = '';
+    this.threadsLoading = true;
+    try {
+      const list = await firstValueFrom(
+        this.http.get<ThreadSummary[]>(`${environment.apiUrl}/api/messages/threads`, { headers })
+      );
+      this.threads = list;
+    } catch {
+      this.inboxError = 'Could not load your conversations.';
+    } finally {
+      this.threadsLoading = false;
+    }
+  }
+
+  closeInbox(): void {
+    this.showInbox = false;
+  }
+
+  async openThread(thread: ThreadSummary): Promise<void> {
+    this.currentPeer = {
+      id: thread.peerId,
+      name: thread.peerName,
+      picture: thread.peerPicture,
+    };
+    this.currentMessages = [];
+    this.composerText = '';
+    this.inboxView = 'thread';
+    this.threadLoading = true;
+
+    const headers = this.authHeaders();
+    if (!headers) {
+      this.threadLoading = false;
+      this.inboxError = 'Please sign in again.';
+      return;
+    }
+
+    try {
+      const messages = await firstValueFrom(
+        this.http.get<ThreadMessage[]>(
+          `${environment.apiUrl}/api/messages/thread/${encodeURIComponent(thread.peerId)}`,
+          { headers }
+        )
+      );
+      this.currentMessages = messages;
+      this.threadLoading = false;
+      this.scrollThreadToBottom();
+
+      // Mark this peer's messages as read.
+      if (thread.unreadCount > 0) {
+        try {
+          await firstValueFrom(
+            this.http.post(
+              `${environment.apiUrl}/api/messages/mark-read`,
+              { peerId: thread.peerId },
+              { headers }
+            )
+          );
+          this.currentMessages = this.currentMessages.map(m =>
+            m.fromUserId === thread.peerId ? { ...m, read: true } : m
+          );
+          // Update local thread summary's unreadCount and global counter.
+          this.threads = this.threads.map(t =>
+            t.peerId === thread.peerId ? { ...t, unreadCount: 0 } : t
+          );
+          void this.refreshUnreadCount();
+        } catch {
+          // Non-fatal.
+        }
+      }
+    } catch {
+      this.threadLoading = false;
+      this.inboxError = 'Could not load this conversation.';
+    }
+  }
+
+  backToThreads(): void {
+    this.inboxView = 'threads';
+    this.currentPeer = null;
+    this.currentMessages = [];
+    this.composerText = '';
+    void this.loadThreads();
+  }
+
+  isMyMessage(msg: ThreadMessage): boolean {
+    const me = this.auth.user$.getValue();
+    return !!me && msg.fromUserId === me.id;
+  }
+
+  async sendThreadReply(): Promise<void> {
+    if (this.sending) return;
+    const peer = this.currentPeer;
+    if (!peer) return;
+    const text = this.composerText.trim();
+    if (!text || text.length > this.composerMaxLength) return;
+
+    const headers = this.authHeaders();
+    if (!headers) {
+      this.inboxError = 'Please sign in again.';
+      return;
+    }
+
+    this.sending = true;
+    try {
+      const created = await firstValueFrom(
+        this.http.post<ThreadMessage>(
+          `${environment.apiUrl}/api/messages`,
+          { toUserId: peer.id, text },
+          { headers }
+        )
+      );
+      this.currentMessages = [...this.currentMessages, created];
+      this.composerText = '';
+      this.scrollThreadToBottom();
+    } catch {
+      this.inboxError = 'Could not send your message.';
+      setTimeout(() => { this.inboxError = ''; }, 3000);
+    } finally {
+      this.sending = false;
+    }
+  }
+
+  onComposerKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void this.sendThreadReply();
+    }
+  }
+
+  private scrollThreadToBottom(): void {
+    setTimeout(() => {
+      const el = this.threadScroll?.nativeElement;
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 0);
+  }
+
+  formatInboxDate(iso: string): string {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const diffMs = Date.now() - d.getTime();
+    const minutes = Math.floor(diffMs / 60_000);
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`;
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  formatBubbleTime(iso: string): string {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  }
+
+  openSenderProfile(userId: string | null | undefined): void {
+    if (!userId) return;
+    this.closeInbox();
+    void this.router.navigate(['/profile', userId]);
   }
 }

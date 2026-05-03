@@ -115,9 +115,16 @@ $bg-mid: #1a2840;
   gap: 12px;
   padding: 10px 20px;
   transition: background 0.15s;
+  cursor: pointer;
+  outline: none;
 
   &:hover {
     background: rgba(255, 255, 255, 0.04);
+  }
+
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 0 0 2px $c-blue;
   }
 
   &--top3 {

@@ -15,12 +15,18 @@ export interface AuthUser {
 }
 
 const STORAGE_KEY = 'auth_user';
+const ID_TOKEN_KEY = 'auth_id_token';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
     private http = inject(HttpClient);
 
     readonly user$ = new BehaviorSubject<AuthUser | null>(this.loadStoredUser());
+    private idToken: string | null = localStorage.getItem(ID_TOKEN_KEY);
+
+    getIdToken(): string | null {
+        return this.idToken;
+    }
     readonly loginError$ = new Subject<'google' | 'server'>();
     readonly updateError$ = new Subject<string>();
     readonly isLoading$ = new BehaviorSubject<boolean>(false);
@@ -85,7 +91,9 @@ export class AuthService {
             );
             console.log('[Auth] Server verification success, user:', user.email);
             this.user$.next(user);
+            this.idToken = idToken;
             localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+            localStorage.setItem(ID_TOKEN_KEY, idToken);
         } catch (err) {
             console.error('[Auth] Server verification error:', err);
             if (err instanceof HttpErrorResponse) {
@@ -124,7 +132,9 @@ export class AuthService {
     async logout(): Promise<void> {
         await GoogleSignIn.signOut();
         this.user$.next(null);
+        this.idToken = null;
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(ID_TOKEN_KEY);
     }
 
     private async handleRedirectCallback(): Promise<void> {
