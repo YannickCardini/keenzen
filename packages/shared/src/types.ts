@@ -202,6 +202,28 @@ export interface CustomRoomStatusMessage {
   players: CustomRoomPlayerInfo[];
 }
 
+/**
+ * Envoyé en push à un joueur en ligne quand un créateur de custom room l'invite.
+ * Le client affiche une notification "Join / Decline" et peut rejoindre en 1 clic.
+ */
+export interface GameInviteMessage {
+  type: 'gameInvite';
+  fromUserId: string;
+  fromUserName: string;
+  fromUserPicture?: string;
+  roomCode: string;
+}
+
+/**
+ * Envoyé au créateur quand un invité accepte ou refuse l'invitation.
+ * Permet au créateur d'afficher l'état réel du bouton (✓ accepté / ✕ refusé).
+ */
+export interface GameInviteResponseMessage {
+  type: 'gameInviteResponse';
+  fromUserId: string;
+  accepted: boolean;
+}
+
 export type ServerMessage =
   | WelcomeMessage
   | GameStateMessage
@@ -212,7 +234,9 @@ export type ServerMessage =
   | WaitingForPlayersMessage
   | GameEndedMessage
   | MatchmakingStatusMessage
-  | CustomRoomStatusMessage;
+  | CustomRoomStatusMessage
+  | GameInviteMessage
+  | GameInviteResponseMessage;
 
 // ── Messages WebSocket — Client → Serveur ─────────────────────────────────────
 
@@ -334,6 +358,35 @@ export interface StartCustomRoomMessage {
   type: 'startCustomRoom';
 }
 
+/**
+ * Ouvre une connexion "présence" pour un utilisateur signed-in sur la home page.
+ * Permet au serveur de pousser des `gameInvite` en temps réel.
+ */
+export interface RegisterPresenceMessage {
+  type: 'registerPresence';
+  userId: string;
+}
+
+/**
+ * Envoyé par le créateur d'une custom room pour inviter un joueur en ligne.
+ * Le serveur résout `toUserId` via la PresenceManager et pousse un `gameInvite`.
+ */
+export interface InviteUserMessage {
+  type: 'inviteUser';
+  toUserId: string;
+  roomCode: string;
+}
+
+/**
+ * Envoyé par l'invité pour répondre à un `gameInvite`.
+ * Le serveur transmet la réponse au créateur via `gameInviteResponse`.
+ */
+export interface InviteResponseMessage {
+  type: 'inviteResponse';
+  fromUserId: string;
+  accepted: boolean;
+}
+
 export type ClientMessage =
   | StartMessage
   | CreateRoomMessage
@@ -346,4 +399,7 @@ export type ClientMessage =
   | AbandonGameMessage
   | CreateCustomRoomMessage
   | JoinCustomRoomMessage
-  | StartCustomRoomMessage;
+  | StartCustomRoomMessage
+  | RegisterPresenceMessage
+  | InviteUserMessage
+  | InviteResponseMessage;

@@ -1,0 +1,74 @@
+import { Injectable } from '@angular/core';
+import { Subject } from 'rxjs';
+import type { GameInviteMessage, GameInviteResponseMessage, ServerMessage } from '@mercury/shared';
+
+/**
+ * Maintains a "presence" WebSocket for a signed-in user idle on the home page.
+ * The server uses it to push real-time `gameInvite` notifications and to relay
+ * decline responses back to inviters.
+ *
+ * The presence socket is short-lived: it is torn down whenever another flow
+ * (matchmaking, custom room, in-game) opens its own WS connection, since a
+ * single tab keeps a single active socket.
+ */
+@Injectable({ providedIn: 'root' })
+export class PresenceService {
+
+  /** Pushed when the server forwards an invite from another user. */
+  gameInvite$ = new Subject<GameInviteMessage>();
+  /** Pushed when the server forwards a decline from a previously invited user. */
+  gameInviteResponse$ = new Subject<GameInviteResponseMessage>();
+
+  private ws: WebSocket | null = null;
+  private currentUserId: string | null = null;
+
+  connect(url: string, userId: string): void {
+    if (this.ws && this.currentUserId === userId) return;
+    this.disconnect();
+
+    this.currentUserId = userId;
+    const ws = new WebSocket(url);
+    this.ws = ws;
+
+    ws.onopen = () => {
+      try { ws.send(JSON.stringify({ type: 'registerPresence', userId })); } catch { /* ignore */ }
+    };
+    ws.onmessage = (event: MessageEvent) => {
+      try {
+        const parsed = JSON.parse(event.data) as ServerMessage;
+        if (parsed.type === 'gameInvite') {
+          this.gameInvite$.next(parsed);
+        } else if (parsed.type === 'gameInviteResponse') {
+          this.gameInviteResponse$.next(parsed);
+        }
+      } catch { /* ignore */ }
+    };
+    ws.onerror = () => { /* surface only via close */ };
+    ws.onclose = () => {
+      if (this.ws === ws) {
+        this.ws = null;
+        this.currentUserId = null;
+      }
+    };
+  }
+
+  /** Sends the user's response to an invite. accepted=true is mainly used for telemetry; the actual join happens through the custom-room flow. */
+  respondToInvite(fromUserId: string, accepted: boolean): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    try {
+      this.ws.send(JSON.stringify({ type: 'inviteResponse', fromUserId, accepted }));
+    } catch { /* ignore */ }
+  }
+
+  disconnect(): void {
+    if (!this.ws) return;
+    const ws = this.ws;
+    this.ws = null;
+    this.currentUserId = null;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onclose = null;
+    try { ws.close(); } catch { /* ignore */ }
+  }
+}

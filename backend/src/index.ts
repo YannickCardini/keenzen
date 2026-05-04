@@ -79,6 +79,10 @@ wss.on('connection', (ws: WebSocket) => {
                     });
                     break;
 
+                case 'registerPresence':
+                    sessionManager.registerPresence(ws, msg.userId);
+                    break;
+
                 case 'joinGame': {
                     const identity = sessionManager.playerIdentities.get(msg.guestPlayerId);
                     if (!identity) {

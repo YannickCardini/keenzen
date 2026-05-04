@@ -4,12 +4,14 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { GameRulesModalComponent } from '../shared/game-rules-modal.component';
+import { InviteToastComponent } from '../shared/invite-toast.component';
 import { Subscription, firstValueFrom, take } from 'rxjs';
 import { version } from '../../../../package.json';
 import { GameStateService } from '../game/services/game-state.service';
 import { TabLockService } from '../game/services/tab-lock.service';
 import { AuthService, type AuthUser } from '../services/auth.service';
-import type { MarbleColor, CustomRoomPlayerInfo } from '@mercury/shared';
+import { PresenceService } from '../services/presence.service';
+import type { GameInviteMessage, MarbleColor, CustomRoomPlayerInfo } from '@mercury/shared';
 import { environment } from 'src/environments/environment';
 import { generateGuestName } from '../shared/guest-name';
 import { normalizeProfileImage } from '../services/image-utils';
@@ -40,7 +42,12 @@ interface InviteCandidate {
   name: string;
   picture: string;
   points: number;
-  /** UI-only state for instant feedback after clicking "Invite". */
+  /**
+   * UI-only state for instant feedback after clicking "Invite".
+   * - sending: WS message in flight (rare, instantly resolves to `sent`)
+   * - sent:    invite dispatched to the recipient's socket
+   * - error:   recipient declined or was offline
+   */
   inviteState: 'idle' | 'sending' | 'sent' | 'error';
 }
 
@@ -48,7 +55,7 @@ interface InviteCandidate {
   selector: 'app-home',
   templateUrl: './home.page.html',
   styleUrls: ['./home.page.scss'],
-  imports: [CommonModule, FormsModule, GameRulesModalComponent],
+  imports: [CommonModule, FormsModule, GameRulesModalComponent, InviteToastComponent],
 })
 export class HomePage implements OnInit, OnDestroy {
   readonly titleLetters = ['M', 'E', 'R', 'C', 'U', 'R', 'Y'];
@@ -110,6 +117,12 @@ export class HomePage implements OnInit, OnDestroy {
   private customGameStartSub: Subscription | null = null;
   private customConnectionErrorSub: Subscription | null = null;
   private customRejectedSub: Subscription | null = null;
+  private customInviteResponseSub: Subscription | null = null;
+
+  // ── Invite notification (received as a guest) ──────────────────────────────
+  pendingInvite: GameInviteMessage | null = null;
+  private gameInviteSub: Subscription | null = null;
+  private presenceInviteResponseSub: Subscription | null = null;
 
   // ── Inbox state ────────────────────────────────────────────────────────────
   showInbox = false;
@@ -136,6 +149,7 @@ export class HomePage implements OnInit, OnDestroy {
     private router: Router,
     private gameStateService: GameStateService,
     private tabLock: TabLockService,
+    private presenceService: PresenceService,
     readonly auth: AuthService,
   ) { }
 
@@ -158,21 +172,42 @@ export class HomePage implements OnInit, OnDestroy {
     this.userSub = this.auth.user$.subscribe(user => {
       if (user) {
         void this.refreshUnreadCount();
+        this.connectPresenceIfIdle(user.id);
       } else {
         this.unreadCount = 0;
         this.threads = [];
         this.currentMessages = [];
         this.currentPeer = null;
+        this.disconnectPresence();
       }
+    });
+
+    this.gameInviteSub = this.presenceService.gameInvite$.subscribe(invite => {
+      // If the user is busy (in a room/game flow), silently drop.
+      if (this.showCustomGame || this.activeGame) return;
+      this.pendingInvite = invite;
     });
   }
 
   ngOnDestroy(): void {
     this.cleanupMatchmaking();
     this.cleanupCustomGame();
+    this.gameInviteSub?.unsubscribe();
+    this.disconnectPresence();
     this.loginErrorSub?.unsubscribe();
     this.updateErrorSub?.unsubscribe();
     this.userSub?.unsubscribe();
+  }
+
+  private connectPresenceIfIdle(userId: string): void {
+    if (this.showCustomGame || this.showMatchmaking || this.activeGame) return;
+    this.presenceService.connect(environment.wsUrl, userId);
+  }
+
+  private disconnectPresence(): void {
+    this.presenceInviteResponseSub?.unsubscribe();
+    this.presenceInviteResponseSub = null;
+    this.presenceService.disconnect();
   }
 
   openLogin() { this.showLogin = true; }
@@ -264,6 +299,7 @@ export class HomePage implements OnInit, OnDestroy {
       return;
     }
 
+    this.disconnectPresence();
     this.tabLock.claimSession();
     this.showMatchmaking = true;
     this.matchmakingConnected = 0;
@@ -305,6 +341,12 @@ export class HomePage implements OnInit, OnDestroy {
     this.gameStateService.disconnect();
     this.tabLock.releaseSession();
     this.showMatchmaking = false;
+    this.reconnectPresenceIfPossible();
+  }
+
+  private reconnectPresenceIfPossible(): void {
+    const user = this.auth.user$.getValue();
+    if (user) this.connectPresenceIfIdle(user.id);
   }
 
   private cleanupMatchmaking(): void {
@@ -328,6 +370,7 @@ export class HomePage implements OnInit, OnDestroy {
       setTimeout(() => this.duplicateTabMessage = false, 4000);
       return;
     }
+    this.disconnectPresence();
     this.resetCustomGameState();
     this.showCustomGame = true;
   }
@@ -390,6 +433,12 @@ export class HomePage implements OnInit, OnDestroy {
         this.cancelCustomGame();
       }
     });
+
+    this.customInviteResponseSub = this.gameStateService.gameInviteResponse$.subscribe(resp => {
+      const candidate = this.inviteCandidates.find(c => c.id === resp.fromUserId);
+      if (!candidate) return;
+      candidate.inviteState = resp.accepted ? 'sent' : 'error';
+    });
   }
 
   async createCustomRoom(): Promise<void> {
@@ -431,6 +480,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.tabLock.releaseSession();
     this.showCustomGame = false;
     this.resetCustomGameState();
+    this.reconnectPresenceIfPossible();
   }
 
   private cleanupCustomGame(): void {
@@ -438,10 +488,12 @@ export class HomePage implements OnInit, OnDestroy {
     this.customGameStartSub?.unsubscribe();
     this.customConnectionErrorSub?.unsubscribe();
     this.customRejectedSub?.unsubscribe();
+    this.customInviteResponseSub?.unsubscribe();
     this.customRoomSub = null;
     this.customGameStartSub = null;
     this.customConnectionErrorSub = null;
     this.customRejectedSub = null;
+    this.customInviteResponseSub = null;
   }
 
   copyRoomCode(): void {
@@ -469,6 +521,34 @@ export class HomePage implements OnInit, OnDestroy {
 
   customSlotPlayer(color: MarbleColor): CustomRoomPlayerInfo | undefined {
     return this.customRoomPlayers.find(p => p.color === color);
+  }
+
+  // ── Invite toast (incoming) ───────────────────────────────────────────────
+
+  async onInviteJoin(invite: GameInviteMessage): Promise<void> {
+    this.pendingInvite = null;
+    if (this.hasActiveGame()) {
+      this.router.navigate(['/game']);
+      return;
+    }
+    if (await this.tabLock.isOtherTabActive()) {
+      this.duplicateTabMessage = true;
+      setTimeout(() => this.duplicateTabMessage = false, 4000);
+      return;
+    }
+    // Notify the inviter we accepted (best-effort), then tear down presence and
+    // open the custom-room flow in one click.
+    this.presenceService.respondToInvite(invite.fromUserId, true);
+    this.disconnectPresence();
+    this.resetCustomGameState();
+    this.showCustomGame = true;
+    this.customJoinCode = invite.roomCode;
+    void this.joinCustomRoomByCode();
+  }
+
+  onInviteDecline(invite: GameInviteMessage): void {
+    this.pendingInvite = null;
+    this.presenceService.respondToInvite(invite.fromUserId, false);
   }
 
   private async loadInviteCandidates(): Promise<void> {
@@ -502,29 +582,14 @@ export class HomePage implements OnInit, OnDestroy {
     return this.inviteCandidates.filter(u => u.name.toLowerCase().includes(q));
   }
 
-  async invitePlayer(candidate: InviteCandidate): Promise<void> {
+  invitePlayer(candidate: InviteCandidate): void {
     if (candidate.inviteState === 'sending' || candidate.inviteState === 'sent') return;
-    const headers = this.authHeaders();
-    if (!headers) {
+    if (!this.customRoomCode) {
       candidate.inviteState = 'error';
       return;
     }
-    candidate.inviteState = 'sending';
-    const text = `Hi! Would you be interested in joining my custom game on Mercury? Enter the following code to join: ${this.customRoomCode}`;
-    try {
-      await firstValueFrom(
-        this.http.post(`${environment.apiUrl}/api/messages`, {
-          toUserId: candidate.id,
-          text,
-        }, { headers })
-      );
-      candidate.inviteState = 'sent';
-    } catch {
-      candidate.inviteState = 'error';
-      setTimeout(() => {
-        if (candidate.inviteState === 'error') candidate.inviteState = 'idle';
-      }, 2500);
-    }
+    candidate.inviteState = 'sent';
+    this.gameStateService.sendInviteUser(candidate.id, this.customRoomCode);
   }
 
   // ── Inbox ──────────────────────────────────────────────────────────────────

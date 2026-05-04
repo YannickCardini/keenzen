@@ -11,6 +11,7 @@ import {
   GameEndedMessage,
   MatchmakingStatusMessage,
   CustomRoomStatusMessage,
+  GameInviteResponseMessage,
   WelcomeMessage,
   AnimationDoneMessage,
   TurnTimeoutMessage,
@@ -244,6 +245,8 @@ export class GameStateService {
   matchmakingStatus$ = new Subject<MatchmakingStatusMessage>();
   /** Émet à chaque mise à jour de l'état d'une custom room (avant que la partie ne démarre). */
   customRoomStatus$ = new Subject<CustomRoomStatusMessage>();
+  /** Émet quand un joueur invité accepte ou refuse une invitation custom room. */
+  gameInviteResponse$ = new Subject<GameInviteResponseMessage>();
   /** Émet dès que le serveur envoie le premier état de jeu (partie démarrée). */
   gameStarted$ = new Subject<void>();
   /** Émet quand le serveur ferme la connexion car un autre onglet a pris la relève (code 4001). */
@@ -345,6 +348,11 @@ export class GameStateService {
           this.guestPlayerId.set(crMsg.guestPlayerId);
           localStorage.setItem('guest_player_id', crMsg.guestPlayerId);
           this.customRoomStatus$.next(crMsg);
+          break;
+        }
+
+        case 'gameInviteResponse': {
+          this.gameInviteResponse$.next(parsed as GameInviteResponseMessage);
           break;
         }
 
@@ -473,6 +481,10 @@ export class GameStateService {
 
   sendStartCustomRoom(): void {
     this.send(JSON.stringify({ type: 'startCustomRoom' }));
+  }
+
+  sendInviteUser(toUserId: string, roomCode: string): void {
+    this.send(JSON.stringify({ type: 'inviteUser', toUserId, roomCode }));
   }
 
   sendAbandonGame(): void {

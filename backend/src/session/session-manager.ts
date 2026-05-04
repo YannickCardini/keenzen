@@ -3,8 +3,9 @@ import { Game } from '../game/game.js';
 import { SingleWsMessenger, MultiWsMessenger } from '../game/game-messenger.js';
 import { MatchmakingManager } from './matchmaking-manager.js';
 import { CustomGameManager } from './custom-game-manager.js';
+import { PresenceManager } from './presence-manager.js';
 import { GameRegistry } from './game-registry.js';
-import type { GameConfig, MarbleColor } from '@mercury/shared';
+import type { ClientMessage, GameConfig, MarbleColor } from '@mercury/shared';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SessionManager — gestion des rooms multi-device
@@ -33,7 +34,37 @@ export class SessionManager {
     /** Maps guest_player_id → { gameId, color } for reconnection lookups. */
     readonly playerIdentities = new Map<string, { gameId: string; color: MarbleColor }>();
 
-    private customGames = new CustomGameManager(this.playerIdentities, this.matchmaking);
+    readonly presence = new PresenceManager();
+
+    private customGames = new CustomGameManager(this.playerIdentities, this.matchmaking, this.presence);
+
+    /**
+     * Enregistre un WebSocket "présence" pour un utilisateur signed-in idle
+     * sur la home page, et installe un listener pour ses messages futurs
+     * (réponses aux invitations).
+     */
+    registerPresence(ws: WebSocket, userId: string): void {
+        this.presence.register(userId, ws);
+
+        const listener = (raw: MessageEvent) => {
+            try {
+                const msg = JSON.parse(raw.data as string) as ClientMessage;
+                if (msg.type === 'inviteResponse') {
+                    this.presence.send(msg.fromUserId, {
+                        type: 'gameInviteResponse',
+                        fromUserId: userId,
+                        accepted: msg.accepted,
+                    });
+                }
+            } catch { /* ignore */ }
+        };
+
+        ws.addEventListener('message', listener);
+        ws.addEventListener('close', () => {
+            ws.removeEventListener('message', listener);
+            this.presence.unregister(ws);
+        });
+    }
 
     /**
      * Démarre une partie immédiatement sur le WS courant.

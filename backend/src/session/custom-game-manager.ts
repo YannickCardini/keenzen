@@ -15,6 +15,7 @@ import { MultiWsMessenger } from '../game/game-messenger.js';
 import { GameRegistry } from './game-registry.js';
 import type { GameConfig, MarbleColor, ClientMessage, CustomRoomPlayerInfo } from '@mercury/shared';
 import type { MatchmakingManager } from './matchmaking-manager.js';
+import type { PresenceManager } from './presence-manager.js';
 
 const COLORS: MarbleColor[] = ['red', 'green', 'blue', 'orange'];
 const ROOM_INACTIVITY_MS = 30 * 60 * 1000; // 30 minutes
@@ -52,6 +53,7 @@ export class CustomGameManager {
     constructor(
         private playerIdentities: Map<string, { gameId: string; color: MarbleColor }>,
         private matchmaking: MatchmakingManager,
+        private presence: PresenceManager,
     ) { }
 
     createRoom(
@@ -76,6 +78,7 @@ export class CustomGameManager {
 
         messenger.addConnection('red', ws);
         this.rooms.set(code, room);
+        if (info.userId) this.presence.register(info.userId, ws);
         ws.addEventListener('message', player.roomMessageListener);
         ws.addEventListener('close', () => this.handleDisconnect(code, 'red'));
 
@@ -108,6 +111,7 @@ export class CustomGameManager {
         const player = this.makePlayer(ws, color, info, guestPlayerId);
         room.players.push(player);
         room.messenger.addConnection(color, ws);
+        if (info.userId) this.presence.register(info.userId, ws);
         ws.addEventListener('message', player.roomMessageListener);
         ws.addEventListener('close', () => this.handleDisconnect(code, color));
 
@@ -140,10 +144,47 @@ export class CustomGameManager {
                 const msg = JSON.parse(raw.data as string) as ClientMessage;
                 if (msg.type === 'startCustomRoom') {
                     this.startRoomFromCreator(ws);
+                } else if (msg.type === 'inviteUser') {
+                    this.handleInviteUser(ws, msg.toUserId, msg.roomCode);
+                } else if (msg.type === 'inviteResponse') {
+                    this.presence.send(msg.fromUserId, {
+                        type: 'gameInviteResponse',
+                        fromUserId: player.userId ?? '',
+                        accepted: msg.accepted,
+                    });
                 }
             } catch { /* ignore */ }
         };
         return player;
+    }
+
+    /**
+     * Push a `gameInvite` to the recipient's online socket(s). Only the room
+     * creator can send invites, and only for their own room. If the recipient
+     * is offline, push an immediate `gameInviteResponse` with accepted=false
+     * back to the creator so their UI can flip to "undelivered/declined".
+     */
+    private handleInviteUser(ws: WebSocket, toUserId: string, roomCode: string): void {
+        const room = this.rooms.get(roomCode);
+        if (!room || room.creatorWs !== ws) return;
+        const creator = room.players.find(p => p.ws === ws);
+        if (!creator || !creator.userId) return;
+        const delivered = this.presence.send(toUserId, {
+            type: 'gameInvite',
+            fromUserId: creator.userId,
+            fromUserName: creator.name,
+            ...(creator.picture ? { fromUserPicture: creator.picture } : {}),
+            roomCode: room.code,
+        });
+        if (!delivered) {
+            try {
+                ws.send(JSON.stringify({
+                    type: 'gameInviteResponse',
+                    fromUserId: toUserId,
+                    accepted: false,
+                }));
+            } catch { /* ignore */ }
+        }
     }
 
     private startRoomFromCreator(ws: WebSocket): void {
@@ -238,7 +279,10 @@ export class CustomGameManager {
         const wasCreator = room.players.find(p => p.color === color)?.ws === room.creatorWs;
         const leaving = room.players.find(p => p.color === color);
         room.players = room.players.filter(p => p.color !== color);
-        if (leaving) leaving.ws.removeEventListener('message', leaving.roomMessageListener);
+        if (leaving) {
+            leaving.ws.removeEventListener('message', leaving.roomMessageListener);
+            this.presence.unregister(leaving.ws);
+        }
 
         if (wasCreator) {
             // Notify and destroy.

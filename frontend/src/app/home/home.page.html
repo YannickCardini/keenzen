@@ -520,6 +520,13 @@
       </div>
     </div>
 
+    <!-- ══════════════ INCOMING GAME INVITE TOAST ══════════════ -->
+    <app-invite-toast
+      [invite]="pendingInvite"
+      (join)="onInviteJoin($event)"
+      (decline)="onInviteDecline($event)"
+    ></app-invite-toast>
+
     <!-- ══════════════ RULES MODAL ══════════════ -->
     <app-game-rules-modal [show]="showRules" (closeModal)="closeRules()"></app-game-rules-modal>
 
