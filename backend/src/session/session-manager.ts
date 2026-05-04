@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { Game } from '../game/game.js';
 import { SingleWsMessenger, MultiWsMessenger } from '../game/game-messenger.js';
 import { MatchmakingManager } from './matchmaking-manager.js';
+import { CustomGameManager } from './custom-game-manager.js';
 import { GameRegistry } from './game-registry.js';
 import type { GameConfig, MarbleColor } from '@mercury/shared';
 
@@ -31,6 +32,8 @@ export class SessionManager {
 
     /** Maps guest_player_id → { gameId, color } for reconnection lookups. */
     readonly playerIdentities = new Map<string, { gameId: string; color: MarbleColor }>();
+
+    private customGames = new CustomGameManager(this.playerIdentities, this.matchmaking);
 
     /**
      * Démarre une partie immédiatement sur le WS courant.
@@ -169,6 +172,23 @@ export class SessionManager {
      */
     joinMatchmaking(ws: WebSocket, playerName?: string, browserId?: string, picture?: string, userId?: string): void {
         this.matchmaking.joinQueue(ws, playerName, this.playerIdentities, browserId, picture, userId);
+    }
+
+    /** Crée une custom room et inscrit le créateur (red). */
+    createCustomRoom(
+        ws: WebSocket,
+        info: { playerName: string; browserId?: string; picture?: string; userId?: string },
+    ): void {
+        this.customGames.createRoom(ws, info);
+    }
+
+    /** Rejoint une custom room existante via son code. */
+    joinCustomRoom(
+        ws: WebSocket,
+        code: string,
+        info: { playerName: string; browserId?: string; picture?: string; userId?: string },
+    ): void {
+        this.customGames.joinRoom(ws, code, info);
     }
 
     private broadcastRoomStatus(roomCode: string): void {

@@ -1,257 +1,163 @@
 ================================================================================
 MERCURY — TODO LIST
 ================================================================================
-Each task below is self-contained. Codebase paths are given as hints; verify
-exact locations before editing. Do not implement multiple tasks at once unless
-explicitly requested.
 
-================================================================================
-TASK 1 — Public Player Profile Page
-================================================================================
-Goal: Create a new page that displays the public profile of any player.
+--------------------------------------------------------------------------------
+1. FIX: "Custom Game" button appears visually disabled on the home page
+--------------------------------------------------------------------------------
 
-Routing & access points:
-  - New route: `/profile/:id` (add it in `frontend/src/app/app.routes.ts`).
-  - Entry point A — Leaderboard: in `frontend/src/app/leaderboard/leaderboard.page.html`,
-    each `<li class="lb-row">` must become clickable and navigate to
-    `/profile/<userId>`. The leaderboard endpoint currently does not return the
-    user `id`; update `GET /api/auth/leaderboard` in
-    `backend/src/auth/auth-router.ts` to also include `c.id` in its SELECT, and
-    extend the `LeaderboardEntry` interface in `leaderboard.page.ts` accordingly.
-  - Entry point B — In-game: in
-    `frontend/src/app/game/components/board/board.component.html` (around
-    line 174), the "View leaderboard" button inside the `profile-panel` must be
-    replaced with a "View profile" button that opens
-    `/profile/<userId>` in a NEW BROWSER TAB (use `window.open(url, '_blank')`).
-    The userId is the one already loaded by the panel (`panel.data` /
-    `loadProfile` logic in `board.component.ts`).
+File: frontend/src/app/home/home.page.scss (lines 450–464)
 
-Page contents (display only — no editing):
-  - Profile picture, displayed at its real/native size (do NOT crop or scale
-    down; only constrain with a sensible max-width so the layout stays usable
-    on small screens).
-  - Player name.
-  - Total points.
-  - Current ranking (rank number).
-  - "Member since" date — derived from `createdAt`.
-  - "Last seen" date — derived from `lastLogin`. NOTE: `lastLogin` is NOT yet
-    exposed by `GET /api/auth/user/:id`; add it to that endpoint's response in
-    `backend/src/auth/auth-router.ts`.
-  - A "Send private message" button (see sub-task below).
+The `.custom-btn` CSS class permanently sets `opacity: 0.6` and
+`cursor: not-allowed`, making the button look disabled even though it is fully
+functional and calls `openCustomGame()` on click.
 
-Private messaging (keep it as simple as possible):
-  - Backend:
-      * Create a new Cosmos DB container `messages` (mirror the pattern used
-        for `getUsersContainer` in `backend/src/db.ts`).
-      * Add endpoints in a new router `backend/src/messages/messages-router.ts`:
-          - `POST /api/messages` — body `{ toUserId, text }`, requires the
-            sender to be authenticated (reuse the existing Google id-token
-            validation logic from `auth-router.ts`; factor it into a helper if
-            needed). Reject if `text` is empty or longer than e.g. 500 chars.
-          - `GET /api/messages/inbox` — returns the authenticated user's
-            received messages, newest first.
-      * Wire the router in `backend/src/index.ts`.
-  - Frontend:
-      * On the profile page, a "Send message" button opens a small modal with
-        a textarea + send button. Send via the new POST endpoint. Show a
-        success toast / inline confirmation; show a generic error otherwise.
-      * No inbox UI is required for this task (the inbox is handled in
-        Task 2); only the send flow needs to work end-to-end here.
-  - Guests (not signed in) should see the "Send message" button disabled with
-    a tooltip "Sign in to send a message".
+Steps:
+  a) Remove `opacity: 0.6` and `cursor: not-allowed` from `.custom-btn` in
+     home.page.scss. The button should look and behave like the other action
+     buttons (e.g. `.matchmaking-btn`).
+  b) The hover state on `.custom-btn:hover` currently overrides nothing because
+     the box-shadow and border-color are the same as the default state — update
+     the hover effect to match the other buttons' hover style.
 
-Acceptance:
-  - Clicking a row on the leaderboard opens that player's profile page.
-  - Clicking "View profile" inside the in-game profile panel opens the
-    profile in a new tab.
-  - Profile page renders all listed fields and lets a signed-in user send a
-    message that is persisted in Cosmos DB.
 
-================================================================================
-TASK 2 — Inbox (boîte de réception)
-================================================================================
-Depends on: Task 1 (the `messages` container and `GET /api/messages/inbox`
-endpoint must already exist).
+--------------------------------------------------------------------------------
+2. REDESIGN: "Custom Room" modal UX (in-room stage)
+--------------------------------------------------------------------------------
 
-Goal: Give signed-in users a way to read the private messages they have
-received via the messaging system introduced in Task 1.
+File: frontend/src/app/home/home.page.html (lines 403–509)
+File: frontend/src/app/home/home.page.scss (custom-card section)
 
-Implementation is intentionally left open. Any approach is acceptable as long
-as the result satisfies these three criteria:
-  1. Simple — minimal UI, no over-engineering, no features beyond reading
-     received messages (and ideally seeing which are unread).
-  2. Ergonomic — the inbox must be easy to find and easy to use; opening it,
-     reading a message, and going back should feel obvious.
-  3. Harmonious — visual style, spacing, colors, typography, and animations
-     must match the rest of the app (re-use existing components / SCSS
-     patterns from the home page, leaderboard, and modals rather than
-     introducing new visual idioms).
+After clicking "Create new room" or joining via a code, the modal transitions
+to the "in-room" stage. This stage has several UX issues:
 
-Suggested directions (non-binding — pick whatever fits best):
-  - A dedicated `/inbox` route, or a modal opened from the user menu / avatar.
-  - An unread-count badge somewhere visible (e.g. on the avatar).
-  - A list of messages with sender name, sender avatar, date, and body.
-  - Mark-as-read behaviour can be implicit (on open) or explicit; whichever
-    is simpler is fine for v1.
+  2a. Scrollbar overflow
+      The `.custom-card` has `max-height: min(85vh, 760px); overflow-y: auto`
+      AND the invite list `.custom-invite-list` has its own `max-height: 220px;
+      overflow-y: auto`. This creates nested scrollbars (vertical AND
+      horizontal in some viewports), which is not ergonomic.
 
-Backend additions are allowed if needed (e.g. an `unreadCount` field, or a
-`PATCH /api/messages/:id/read` endpoint), but only add what the chosen UX
-actually requires. Guests have no inbox.
+      Steps:
+        - Redesign the modal layout so it fits within the viewport without
+          triggering the outer `.custom-card` scrollbar.
+        - The invite list's inner scroll is acceptable; the outer card scroll
+          should not appear under normal conditions.
+        - Consider a tighter vertical layout or splitting the invite section
+          into a separate step/screen if needed.
 
-Acceptance:
-  - A signed-in user who has received messages can open the inbox and read
-    them, sorted newest first.
-  - The inbox visually fits in with the rest of the app.
-  - Guests cannot access the inbox.
+  2b. Rename the "Start" button
+      The start button (home.page.html:500–505) shows "Start (fill with
+      matchmaking)" when fewer than 4 players are in the room. This label is
+      too long and unclear. Rename it to just "Start" in all cases.
+      The `[disabled]` condition (`customRoomPlayers.length < 1`) is correct
+      and should be kept.
 
-================================================================================
-TASK 3 — Custom Game (currently shown as "Coming soon")
-================================================================================
-Goal: Implement the Custom Game flow. The button already exists in
-`frontend/src/app/home/home.page.html` (around line 87) but is disabled.
+  2c. Remove or justify the "Leave" button
+      The "Leave" button (home.page.html:499) calls `cancelCustomGame()`.
+      There is already a close button (×) at the top of the modal
+      (home.page.html:357) that also closes the modal. Evaluate whether the
+      "Leave" button adds value or creates confusion — if it is redundant,
+      remove it.
 
-Sub-task 3.1 — Frontend UI
-  - Remove `disabled` and `title="Coming soon"` from the Custom Game button.
-    Bind `(click)` to a new `openCustomGame()` method in
-    `frontend/src/app/home/home.page.ts`.
-  - Create a Custom Game modal (similar visual style to the existing matchmaking
-    modal, see lines 312–366 of `home.page.html`) containing:
-      a) A unique 6-character alphanumeric "room code" (generated by the
-         backend on creation), prominently displayed with a copy-to-clipboard
-         button. Guests can use this code to join WITHOUT an account.
-      b) A list of currently joined players (up to 4), styled like the
-         matchmaking slots.
-      c) A "Join with code" input INSIDE this same modal (not on the home
-         page). After clicking the Custom Game button, the user can either
-         create a new room OR paste an existing code to join one. Joining
-         via code does NOT require authentication; reuse the same guest-name
-         flow as matchmaking (`generateGuestName` in
-         `frontend/src/app/shared/guest-name.ts`).
-      d) An invite section showing all signed-up players from the DB:
-            - Reuse the leaderboard list visual (`leaderboard.page.html`).
-            - Sorted by `points` DESC.
-            - With a search bar that filters by `name` (case-insensitive,
-              client-side filtering is acceptable).
-            - Each row has an "Invite" button. Clicking "Invite" simply
-              sends a PRIVATE MESSAGE to that player (reusing the messaging
-              system from Task 1 — `POST /api/messages`). The message body
-              is in ENGLISH and reads roughly:
-                "Hi! Would you be interested in joining my custom game?
-                 Enter the following code to join: <ROOM_CODE>"
-              For v1 we keep it simple — no auto-join, no deep link. A
-              future iteration may embed a direct join link in this
-              message; do NOT implement that now.
-      e) A "Start game" button visible only to the room creator.
+  2d. Improve the "Invite" button states with icons
+      The invite button (home.page.html:482–490) currently shows text only:
+        - `inviteState === 'idle'`    → "Invite"
+        - `inviteState === 'sending'` → "…"
+        - `inviteState === 'sent'`    → "Sent"
+        - `inviteState === 'error'`   → "Retry"
 
-Sub-task 3.2 — Backend
-  - Create a `CustomGameManager` in `backend/src/session/` modelled on
-    `MatchmakingManager` (`backend/src/session/matchmaking-manager.ts`) but
-    keyed by a room code instead of a single global queue:
-      * `createRoom(creatorWs, creatorInfo)` → returns `{ code }`.
-      * `joinRoom(code, ws, playerInfo)` → assigns next free color
-        (red → green → blue → orange).
-      * `startRoom(code, requesterWs)` → only the creator can call this.
-        - If the room has 4 players: start the game immediately (same flow
-          as `MatchmakingManager` — instantiate `Game`, register in
-          `GameRegistry`).
-        - If the room has fewer than 4 players: forward the existing players
-          into the public matchmaking queue. They should be added to the
-          current `MatchmakingManager` session if one is pending; otherwise a
-          new pending session must be created. Preserve their colors when
-          possible; reassign if there's a conflict.
-  - Wire WebSocket message types (extend the existing protocol used by
-    `game-state.service.ts`):
-      * `createCustomRoom`, `joinCustomRoom`, `startCustomRoom`,
-        `customRoomStatus` (broadcast like `matchmakingStatus`).
+      Replace with icon-based feedback:
+        - `sending` → show a spinning loader icon (spinner SVG or CSS
+          animation) instead of "…"
+        - `sent`    → show a green checkmark icon (✓) instead of "Sent"
+        - `error`   → show a red ✕ icon; optionally change to "Retry" on hover
+        - `idle`    → keep "Invite" label as-is
 
-Sub-task 3.3 — Edge cases
-  - Reject duplicate tab joins from the same browser (mirror the `browserId`
-    check in `MatchmakingManager.joinQueue`).
-  - If the creator disconnects before starting, the room is destroyed and
-    remaining players are notified.
-  - Codes expire after e.g. 30 minutes of inactivity.
 
-Acceptance:
-  - A signed-in user can open the Custom Game modal, see a generated code,
-    and copy it.
-  - From the same modal, another user (signed in OR guest) can paste a code
-    and join the room.
-  - Inviting a DB user from the search list delivers an English private
-    message containing the room code, visible in that user's inbox
-    (Task 1 + Task 2 dependency).
-  - Pressing "Start" with 4 players begins a normal game.
-  - Pressing "Start" with <4 players merges everyone into public matchmaking.
+--------------------------------------------------------------------------------
+3. FEATURE: Real-time invite notification for invited players
+--------------------------------------------------------------------------------
 
-================================================================================
-TASK 4 — Clean up "À propos" / Info modal
-================================================================================
-File: `frontend/src/app/home/home.page.html`
-Section: "SETTINGS / INFO MODAL" (lines ~234–309).
+Files:
+  - frontend/src/app/home/home.page.ts   (invitePlayer method, lines 505–528)
+  - frontend/src/app/home/home.page.html (invite section, lines 466–494)
+  - backend/src/session/custom-game-manager.ts
 
-Remove:
-  - The entire `<div class="social-section">` block (lines ~281–306),
-    including:
-      * The `<p class="social-title">Retrouvez-nous</p>` text.
-      * All three social `<a class="social-btn">` buttons (GitHub, Discord,
-        Twitter/X).
-  - Any orphan SCSS rules in `home.page.scss` that targeted those classes
-    exclusively (`.social-section`, `.social-title`, `.social-row`,
-    `.social-btn`, `.social-btn.discord`, `.social-btn.twitter`). Leave
-    shared rules (e.g. `.modal-header`) untouched.
+Context:
+  When a room creator invites a player, the app currently sends a plain-text
+  message via `POST /api/messages` (home.page.ts:516) with this content:
+    "Hi! Would you be interested in joining my custom game on Mercury? Enter
+     the following code to join: ${this.customRoomCode}"
+  The invited player only sees this in their inbox — there is NO real-time
+  alert.
 
-Acceptance: opening the Info modal shows Version / Contact / Développeur
-and the "Game Rules" button only — no social section.
+Goal:
+  Invited players should receive an instant, visible notification and be able
+  to join the room in one click.
 
-================================================================================
-TASK 5 — Update Game Rules text (start-square restriction)
-================================================================================
-File: `frontend/src/app/shared/game-rules-modal.component.html`
-Location: the `<li class="rules-key">` with the blue dot, around lines 96–99.
+Steps:
+  3a. Design an invite notification type
+      - Define a dedicated invite payload in `packages/shared/src/types.ts`
+        (e.g. `GameInviteMessage`) that carries: `fromUserName`, `roomCode`,
+        and optionally `fromUserPicture`.
+      - This should be distinct from the plain chat message type already in use.
 
-Replace the current text:
-    "Home lane order: Marbles fill from the back slot forward — you cannot
-     jump over your own marbles inside the lane."
+  3b. Send the invite via WebSocket (server push) instead of HTTP message
+      - On the backend, when the creator invites a user, the server should push
+        a `gameInvite` WebSocket event directly to the invited player's socket
+        (if they are online), in addition to or instead of the HTTP message.
 
-With a new bullet that explains the start-square forward-first rule:
+  3c. Show a toast/notification to the invited player
+      - On the frontend, listen for `gameInvite` WebSocket events in
+        `GameStateService` (or `home.page.ts`).
+      - When the event is received, show a non-blocking overlay notification
+        (e.g. bottom-right corner toast or small dialog) that:
+          • Displays who sent the invite (name + avatar).
+          • Has a "Join" button that, when clicked, calls `joinCustomRoomByCode()`
+            with the `roomCode` from the event payload — this should require
+            only 1 click.
+          • Has a "Decline" button (or auto-dismiss after ~15 s).
+      - No existing toast component exists in the codebase — a new one must be
+        created.
 
-    Title (bold): "Start-square restriction"
-    Body: "A marble that has just entered the board on its start square
-           (via an Ace or a King) must first move FORWARD by any number of
-           squares before it is allowed to move backward (via a 4) or be
-           swapped (via a Jack)."
+  3d. Update invite button states accordingly
+      - `inviteState === 'sent'` now means the WebSocket event was sent, not
+        necessarily accepted. The checkmark icon (from task 2d) reflects
+        "invite dispatched", not "player accepted" — this is acceptable.
+      - If the player declines, update the sender's invite button to show a
+        red ✕ (requires a new WebSocket response event from the invited player).
 
-Keep the same `<li class="rules-key">` structure and the
-`rules-key-dot--blue` class. Do NOT change other bullets.
 
-Acceptance: opening the Rules modal shows the new bullet in place of the
-"Home lane order" one; layout is unchanged.
+--------------------------------------------------------------------------------
+4. CLEANUP: Remove redundant content in the "Key Rules" section of Game Rules
+--------------------------------------------------------------------------------
 
-================================================================================
-TASK 6 — Black border around in-game player avatar
-================================================================================
-Goal: Improve visibility of the player profile picture inside the player card
-during a game. Some pictures are too close in color to the surrounding UI and
-visually disappear.
+File: frontend/src/app/shared/game-rules-modal.component.html (lines 87–104)
 
-Scope (IMPORTANT — only this one location):
-  - Apply the border ONLY inside the in-game `player-card` avatar (the
-    `.avatar-ring` / `.avatar-img` element used in
-    `frontend/src/app/game/components/board/board.component.html` lines
-    16–25).
-  - DO NOT modify the avatar shown in the "new turn" banner. Verify by
-    grepping for the new-turn / current-turn banner component (look in
-    `frontend/src/app/game/components/table/` and any "banner"/"turn"
-    related templates) and explicitly leaving its avatar styling untouched.
+The "Key Rules" section currently lists three rules, but rules 1 and 3 overlap,
+and rules 2 and 3 both address Jack swap restrictions:
 
-Implementation:
-  - In `frontend/src/app/game/components/board/board.component.scss`,
-    locate the `.player-card` block (starts at line ~521) and add a
-    1–2px solid black border to the `.avatar-img` and the
-    `.avatar-color` fallback (so both image and color-fallback variants
-    are bordered consistently). Keep the existing border-radius so the
-    border follows the circular shape.
+  Current rules:
+    1. Safe start: A marble on its own start position blocks passage and
+       cannot be captured or swapped.
+    2. Start-square restriction: A marble that just entered (via A or K) must
+       move forward before it can move backward (4) or be swapped (Jack).
+    3. Jack restriction: Cannot swap with a marble on its start position or
+       already in a home lane.
 
-Acceptance:
-  - In a running game, every player card shows its avatar with a clear
-    black outline.
-  - The "new turn" banner avatar is visually unchanged.
+  Overlap:
+    - Rule 1 already states that a start-position marble cannot be swapped.
+    - Rule 3 repeats this (Jack cannot swap with a start-position marble) and
+      adds a second case (home lane).
+    - Rule 2 also mentions Jack swap being blocked for freshly entered marbles.
+
+Steps:
+  a) Merge rules 1 and 3 into a single "Start position protection" rule that
+     covers all cases: blocks passage, cannot be captured, cannot be swapped
+     (by any card, including Jack).
+  b) Update rule 2 ("Start-square restriction") to remove the Jack-swap
+     reference since it is now covered by the merged rule — keep only the
+     "must move forward before moving backward (4)" constraint.
+  c) Add, if not already implied, the case from rule 3 about the home lane:
+     "Jack cannot swap with a marble already in a home lane."
+  d) Ensure the final list has no duplicated restrictions across bullet points.

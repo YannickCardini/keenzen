@@ -10,6 +10,7 @@ import {
   ActionRejectedMessage,
   GameEndedMessage,
   MatchmakingStatusMessage,
+  CustomRoomStatusMessage,
   WelcomeMessage,
   AnimationDoneMessage,
   TurnTimeoutMessage,
@@ -241,6 +242,8 @@ export class GameStateService {
   autoPlayed$ = new Subject<MarbleColor>();
   /** Émet à chaque mise à jour du matchmaking (nombre de joueurs connectés, couleur assignée). */
   matchmakingStatus$ = new Subject<MatchmakingStatusMessage>();
+  /** Émet à chaque mise à jour de l'état d'une custom room (avant que la partie ne démarre). */
+  customRoomStatus$ = new Subject<CustomRoomStatusMessage>();
   /** Émet dès que le serveur envoie le premier état de jeu (partie démarrée). */
   gameStarted$ = new Subject<void>();
   /** Émet quand le serveur ferme la connexion car un autre onglet a pris la relève (code 4001). */
@@ -337,6 +340,14 @@ export class GameStateService {
           break;
         }
 
+        case 'customRoomStatus': {
+          const crMsg = parsed as CustomRoomStatusMessage;
+          this.guestPlayerId.set(crMsg.guestPlayerId);
+          localStorage.setItem('guest_player_id', crMsg.guestPlayerId);
+          this.customRoomStatus$.next(crMsg);
+          break;
+        }
+
         case 'actionRejected': {
           const msg = parsed as ActionRejectedMessage;
           console.warn('⚠️ Action rejetée par le serveur :', msg.reason);
@@ -428,6 +439,40 @@ export class GameStateService {
       localStorage.setItem('browser_id', browserId);
     }
     this.send(JSON.stringify({ type: 'joinMatchmaking', playerName, browserId, picture, userId }));
+  }
+
+  private getOrCreateBrowserId(): string {
+    let id = localStorage.getItem('browser_id');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('browser_id', id);
+    }
+    return id;
+  }
+
+  sendCreateCustomRoom(playerName: string, picture?: string, userId?: string): void {
+    this.send(JSON.stringify({
+      type: 'createCustomRoom',
+      playerName,
+      browserId: this.getOrCreateBrowserId(),
+      ...(picture ? { picture } : {}),
+      ...(userId ? { userId } : {}),
+    }));
+  }
+
+  sendJoinCustomRoom(code: string, playerName: string, picture?: string, userId?: string): void {
+    this.send(JSON.stringify({
+      type: 'joinCustomRoom',
+      code,
+      playerName,
+      browserId: this.getOrCreateBrowserId(),
+      ...(picture ? { picture } : {}),
+      ...(userId ? { userId } : {}),
+    }));
+  }
+
+  sendStartCustomRoom(): void {
+    this.send(JSON.stringify({ type: 'startCustomRoom' }));
   }
 
   sendAbandonGame(): void {

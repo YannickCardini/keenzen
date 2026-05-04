@@ -9,7 +9,7 @@ import { version } from '../../../../package.json';
 import { GameStateService } from '../game/services/game-state.service';
 import { TabLockService } from '../game/services/tab-lock.service';
 import { AuthService, type AuthUser } from '../services/auth.service';
-import type { MarbleColor } from '@mercury/shared';
+import type { MarbleColor, CustomRoomPlayerInfo } from '@mercury/shared';
 import { environment } from 'src/environments/environment';
 import { generateGuestName } from '../shared/guest-name';
 import { normalizeProfileImage } from '../services/image-utils';
@@ -33,6 +33,15 @@ interface ThreadMessage {
   text: string;
   createdAt: string;
   read: boolean;
+}
+
+interface InviteCandidate {
+  id: string;
+  name: string;
+  picture: string;
+  points: number;
+  /** UI-only state for instant feedback after clicking "Invite". */
+  inviteState: 'idle' | 'sending' | 'sent' | 'error';
 }
 
 @Component({
@@ -78,6 +87,29 @@ export class HomePage implements OnInit, OnDestroy {
 
   loginError = false;
   loginErrorMessage = '';
+
+  // ── Custom Game state ──────────────────────────────────────────────────────
+  showCustomGame = false;
+  /** Stage of the custom-game flow: pick action, then in-room. */
+  customStage: 'choose' | 'in-room' = 'choose';
+  customRoomCode = '';
+  customRoomPlayers: CustomRoomPlayerInfo[] = [];
+  myCustomColor: MarbleColor | null = null;
+  iAmCreator = false;
+  customJoinCode = '';
+  customError = '';
+  customCopied = false;
+  customStarting = false;
+
+  // Invite section
+  inviteCandidates: InviteCandidate[] = [];
+  inviteSearch = '';
+  inviteLoading = false;
+
+  private customRoomSub: Subscription | null = null;
+  private customGameStartSub: Subscription | null = null;
+  private customConnectionErrorSub: Subscription | null = null;
+  private customRejectedSub: Subscription | null = null;
 
   // ── Inbox state ────────────────────────────────────────────────────────────
   showInbox = false;
@@ -137,6 +169,7 @@ export class HomePage implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.cleanupMatchmaking();
+    this.cleanupCustomGame();
     this.loginErrorSub?.unsubscribe();
     this.updateErrorSub?.unsubscribe();
     this.userSub?.unsubscribe();
@@ -281,6 +314,217 @@ export class HomePage implements OnInit, OnDestroy {
     this.matchmakingSub = null;
     this.gameStartSub = null;
     this.connectionErrorSub = null;
+  }
+
+  // ── Custom Game ────────────────────────────────────────────────────────────
+
+  async openCustomGame(): Promise<void> {
+    if (this.hasActiveGame()) {
+      this.router.navigate(['/game']);
+      return;
+    }
+    if (await this.tabLock.isOtherTabActive()) {
+      this.duplicateTabMessage = true;
+      setTimeout(() => this.duplicateTabMessage = false, 4000);
+      return;
+    }
+    this.resetCustomGameState();
+    this.showCustomGame = true;
+  }
+
+  private resetCustomGameState(): void {
+    this.customStage = 'choose';
+    this.customRoomCode = '';
+    this.customRoomPlayers = [];
+    this.myCustomColor = null;
+    this.iAmCreator = false;
+    this.customJoinCode = '';
+    this.customError = '';
+    this.customCopied = false;
+    this.customStarting = false;
+    this.inviteCandidates = [];
+    this.inviteSearch = '';
+    this.inviteLoading = false;
+  }
+
+  private wireCustomRoomSubs(): void {
+    this.cleanupCustomGame();
+
+    this.customRoomSub = this.gameStateService.customRoomStatus$.subscribe(status => {
+      this.customRoomCode = status.code;
+      this.customRoomPlayers = status.players;
+      this.myCustomColor = status.myColor;
+      this.iAmCreator = status.isCreator;
+      this.customStage = 'in-room';
+      this.customError = '';
+      // Lazy-load invite list once we know we're the signed-in creator.
+      if (status.isCreator && this.auth.user$.getValue() && this.inviteCandidates.length === 0) {
+        void this.loadInviteCandidates();
+      }
+    });
+
+    this.customGameStartSub = this.gameStateService.gameStarted$.pipe(take(1)).subscribe(() => {
+      this.gameStateService.myPlayerColor.set(this.myCustomColor);
+      this.cleanupCustomGame();
+      this.showCustomGame = false;
+      this.router.navigate(['/game']);
+    });
+
+    this.customConnectionErrorSub = this.gameStateService.connectionError$.pipe(take(1)).subscribe(() => {
+      this.cleanupCustomGame();
+      this.gameStateService.disconnect();
+      this.tabLock.releaseSession();
+      this.showCustomGame = false;
+      this.matchmakingError = true;
+      setTimeout(() => this.matchmakingError = false, 4000);
+    });
+
+    this.customRejectedSub = this.gameStateService.actionRejected$.subscribe(reason => {
+      this.customError = reason;
+      // If we're still on the choose screen, the connection should be torn down
+      // because the server already rejected us (e.g., room not found).
+      if (this.customStage === 'choose') {
+        this.gameStateService.disconnect();
+      } else {
+        // Mid-room rejection (creator left / room expired) → return to home.
+        this.cancelCustomGame();
+      }
+    });
+  }
+
+  async createCustomRoom(): Promise<void> {
+    const user = this.auth.user$.getValue();
+    const playerName = user?.name ?? generateGuestName();
+    this.customError = '';
+    this.tabLock.claimSession();
+    this.wireCustomRoomSubs();
+    this.gameStateService.connect(environment.wsUrl, () => {
+      this.gameStateService.sendCreateCustomRoom(playerName, user?.picture, user?.id);
+    });
+  }
+
+  async joinCustomRoomByCode(): Promise<void> {
+    const code = this.customJoinCode.trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
+      this.customError = 'Code must be 6 letters/digits.';
+      return;
+    }
+    const user = this.auth.user$.getValue();
+    const playerName = user?.name ?? generateGuestName();
+    this.customError = '';
+    this.tabLock.claimSession();
+    this.wireCustomRoomSubs();
+    this.gameStateService.connect(environment.wsUrl, () => {
+      this.gameStateService.sendJoinCustomRoom(code, playerName, user?.picture, user?.id);
+    });
+  }
+
+  startCustomRoom(): void {
+    if (!this.iAmCreator || this.customStarting) return;
+    this.customStarting = true;
+    this.gameStateService.sendStartCustomRoom();
+  }
+
+  cancelCustomGame(): void {
+    this.cleanupCustomGame();
+    this.gameStateService.disconnect();
+    this.tabLock.releaseSession();
+    this.showCustomGame = false;
+    this.resetCustomGameState();
+  }
+
+  private cleanupCustomGame(): void {
+    this.customRoomSub?.unsubscribe();
+    this.customGameStartSub?.unsubscribe();
+    this.customConnectionErrorSub?.unsubscribe();
+    this.customRejectedSub?.unsubscribe();
+    this.customRoomSub = null;
+    this.customGameStartSub = null;
+    this.customConnectionErrorSub = null;
+    this.customRejectedSub = null;
+  }
+
+  copyRoomCode(): void {
+    if (!this.customRoomCode) return;
+    const code = this.customRoomCode;
+    const onSuccess = () => {
+      this.customCopied = true;
+      setTimeout(() => this.customCopied = false, 1800);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(onSuccess).catch(() => onSuccess());
+    } else {
+      // Fallback for older browsers — best-effort.
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* ignore */ }
+      document.body.removeChild(ta);
+      onSuccess();
+    }
+  }
+
+  customSlotPlayer(color: MarbleColor): CustomRoomPlayerInfo | undefined {
+    return this.customRoomPlayers.find(p => p.color === color);
+  }
+
+  private async loadInviteCandidates(): Promise<void> {
+    this.inviteLoading = true;
+    try {
+      const list = await firstValueFrom(
+        this.http.get<{ id: string; name: string; picture: string; points: number; ranking: number }[]>(
+          `${environment.apiUrl}/api/auth/leaderboard`,
+        )
+      );
+      const me = this.auth.user$.getValue();
+      this.inviteCandidates = list
+        .filter(u => u.id && u.id !== me?.id)
+        .map(u => ({
+          id: u.id,
+          name: u.name,
+          picture: u.picture,
+          points: u.points,
+          inviteState: 'idle' as const,
+        }));
+    } catch {
+      // Silently fail — invite section just won't show entries.
+    } finally {
+      this.inviteLoading = false;
+    }
+  }
+
+  filteredInviteCandidates(): InviteCandidate[] {
+    const q = this.inviteSearch.trim().toLowerCase();
+    if (!q) return this.inviteCandidates;
+    return this.inviteCandidates.filter(u => u.name.toLowerCase().includes(q));
+  }
+
+  async invitePlayer(candidate: InviteCandidate): Promise<void> {
+    if (candidate.inviteState === 'sending' || candidate.inviteState === 'sent') return;
+    const headers = this.authHeaders();
+    if (!headers) {
+      candidate.inviteState = 'error';
+      return;
+    }
+    candidate.inviteState = 'sending';
+    const text = `Hi! Would you be interested in joining my custom game on Mercury? Enter the following code to join: ${this.customRoomCode}`;
+    try {
+      await firstValueFrom(
+        this.http.post(`${environment.apiUrl}/api/messages`, {
+          toUserId: candidate.id,
+          text,
+        }, { headers })
+      );
+      candidate.inviteState = 'sent';
+    } catch {
+      candidate.inviteState = 'error';
+      setTimeout(() => {
+        if (candidate.inviteState === 'error') candidate.inviteState = 'idle';
+      }, 2500);
+    }
   }
 
   // ── Inbox ──────────────────────────────────────────────────────────────────

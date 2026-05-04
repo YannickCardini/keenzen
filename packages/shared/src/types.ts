@@ -183,6 +183,25 @@ export interface WaitingForPlayersMessage {
   missing: MarbleColor[];
 }
 
+/** Info publique d'un joueur d'une custom room. */
+export interface CustomRoomPlayerInfo {
+  color: MarbleColor;
+  name: string;
+  picture?: string;
+  userId?: string;
+  isCreator: boolean;
+}
+
+/** Envoyé à tous les membres d'une custom room à chaque changement. */
+export interface CustomRoomStatusMessage {
+  type: 'customRoomStatus';
+  code: string;
+  myColor: MarbleColor;
+  guestPlayerId: string;
+  isCreator: boolean;
+  players: CustomRoomPlayerInfo[];
+}
+
 export type ServerMessage =
   | WelcomeMessage
   | GameStateMessage
@@ -192,7 +211,8 @@ export type ServerMessage =
   | RoomCreatedMessage
   | WaitingForPlayersMessage
   | GameEndedMessage
-  | MatchmakingStatusMessage;
+  | MatchmakingStatusMessage
+  | CustomRoomStatusMessage;
 
 // ── Messages WebSocket — Client → Serveur ─────────────────────────────────────
 
@@ -283,6 +303,37 @@ export interface AbandonGameMessage {
   type: 'abandonGame';
 }
 
+/**
+ * Crée une nouvelle custom room et inscrit le créateur comme premier joueur (red).
+ * Le serveur répond avec un `customRoomStatus` contenant le code généré.
+ */
+export interface CreateCustomRoomMessage {
+  type: 'createCustomRoom';
+  playerName: string;
+  browserId?: string;
+  picture?: string;
+  userId?: string;
+}
+
+/** Rejoint une custom room existante via son code. */
+export interface JoinCustomRoomMessage {
+  type: 'joinCustomRoom';
+  code: string;
+  playerName: string;
+  browserId?: string;
+  picture?: string;
+  userId?: string;
+}
+
+/**
+ * Demande au serveur de lancer la partie. Seul le créateur de la room peut le faire.
+ * Si la room contient 4 joueurs, la partie démarre. Sinon, les joueurs sont
+ * basculés dans la file matchmaking publique.
+ */
+export interface StartCustomRoomMessage {
+  type: 'startCustomRoom';
+}
+
 export type ClientMessage =
   | StartMessage
   | CreateRoomMessage
@@ -292,4 +343,7 @@ export type ClientMessage =
   | AnimationDoneMessage
   | TurnTimeoutMessage
   | JoinGameMessage
-  | AbandonGameMessage;
+  | AbandonGameMessage
+  | CreateCustomRoomMessage
+  | JoinCustomRoomMessage
+  | StartCustomRoomMessage;

@@ -61,6 +61,24 @@ wss.on('connection', (ws: WebSocket) => {
                     sessionManager.joinMatchmaking(ws, msg.playerName, msg.browserId, msg.picture, msg.userId);
                     break;
 
+                case 'createCustomRoom':
+                    sessionManager.createCustomRoom(ws, {
+                        playerName: msg.playerName,
+                        ...(msg.browserId ? { browserId: msg.browserId } : {}),
+                        ...(msg.picture ? { picture: msg.picture } : {}),
+                        ...(msg.userId ? { userId: msg.userId } : {}),
+                    });
+                    break;
+
+                case 'joinCustomRoom':
+                    sessionManager.joinCustomRoom(ws, msg.code, {
+                        playerName: msg.playerName,
+                        ...(msg.browserId ? { browserId: msg.browserId } : {}),
+                        ...(msg.picture ? { picture: msg.picture } : {}),
+                        ...(msg.userId ? { userId: msg.userId } : {}),
+                    });
+                    break;
+
                 case 'joinGame': {
                     const identity = sessionManager.playerIdentities.get(msg.guestPlayerId);
                     if (!identity) {
