@@ -1,163 +1,32 @@
-================================================================================
-MERCURY — TODO LIST
-================================================================================
+# TODO
 
---------------------------------------------------------------------------------
-1. FIX: "Custom Game" button appears visually disabled on the home page
---------------------------------------------------------------------------------
+## 1. Loading indicator on the "Create new room" button (Custom Game modal)
 
-File: frontend/src/app/home/home.page.scss (lines 450–464)
+**Where:** Custom Game modal, "choose" stage.
+- Template: [frontend/src/app/home/home.page.html:376-379](frontend/src/app/home/home.page.html#L376-L379) (`button.custom-create-btn` calling `createCustomRoom()`).
+- Component method: [frontend/src/app/home/home.page.ts:444-453](frontend/src/app/home/home.page.ts#L444-L453) (`createCustomRoom()`).
+- Stage transition is driven by `customRoomStatus$` subscription at [frontend/src/app/home/home.page.ts:396-407](frontend/src/app/home/home.page.ts#L396-L407), which sets `customStage = 'in-room'` only after the server replies.
 
-The `.custom-btn` CSS class permanently sets `opacity: 0.6` and
-`cursor: not-allowed`, making the button look disabled even though it is fully
-functional and calls `openCustomGame()` on click.
+**Problem:**
+In production, there is a noticeable delay between clicking "Create new room" and the modal switching to the "in-room" stage. The delay is caused by the websocket round-trip: `gameStateService.connect(...)` opens a new WS connection, then `sendCreateCustomRoom(...)` is sent, and the UI only updates when the backend emits the `customRoomStatus` event. During this window, the button gives no visual feedback, so the user may think the click was ignored and click again.
 
-Steps:
-  a) Remove `opacity: 0.6` and `cursor: not-allowed` from `.custom-btn` in
-     home.page.scss. The button should look and behave like the other action
-     buttons (e.g. `.matchmaking-btn`).
-  b) The hover state on `.custom-btn:hover` currently overrides nothing because
-     the box-shadow and border-color are the same as the default state — update
-     the hover effect to match the other buttons' hover style.
+**Goal:**
+Show a loading state on the "Create new room" button (and prevent re-clicks) from the moment it is clicked until either:
+- the modal transitions to `customStage === 'in-room'`, or
+- an error occurs (`customError` set, or `connectionError$` / `actionRejected$` fires).
 
+**Suggested implementation steps:**
+1. Add a new comthis.gameStateService.connectponent flag, e.g. `customCreating = false`, alongside the existing `customStarting` flag at [frontend/src/app/home/home.page.ts:109](frontend/src/app/home/home.page.ts#L109). Reset it to `false` in `resetCustomGameState()` ([home.page.ts:378-391](frontend/src/app/home/home.page.ts#L378-L391)).
+2. In `createCustomRoom()` ([home.page.ts:444-453](frontend/src/app/home/home.page.ts#L444-L453)):
+   - Guard early-return if `customCreating` is already `true`.
+   - Set `customCreating = true` before calling `gameStateService.connect(...)`.
+   - Clear `customCreating = false` once the stage transitions to `'in-room'` (inside the `customRoomStatus$` subscription at [home.page.ts:396-407](frontend/src/app/home/home.page.ts#L396-L407)) and inside the error/rejection handlers at [home.page.ts:416-435](frontend/src/app/home/home.page.ts#L416-L435).
+3. In the template ([home.page.html:376-379](frontend/src/app/home/home.page.html#L376-L379)):
+   - Add `[disabled]="customCreating"` to the button.
+   - Swap the label/icon for a loading state when `customCreating` is true (mirror the existing `customStarting ? 'Starting…' : 'Start'` pattern at [home.page.html:511-513](frontend/src/app/home/home.page.html#L511-L513) — e.g. `{{ customCreating ? 'Creating…' : 'Create new room' }}`, optionally with a spinner replacing the `ab-marble` element).
+4. Apply the same treatment to the "Join" button at [home.page.html:395-397](frontend/src/app/home/home.page.html#L395-L397) / `joinCustomRoomByCode()` ([home.page.ts:455](frontend/src/app/home/home.page.ts#L455)) if it shares the same delay (verify by inspecting the same WS round-trip).
 
---------------------------------------------------------------------------------
-2. REDESIGN: "Custom Room" modal UX (in-room stage)
---------------------------------------------------------------------------------
-
-File: frontend/src/app/home/home.page.html (lines 403–509)
-File: frontend/src/app/home/home.page.scss (custom-card section)
-
-After clicking "Create new room" or joining via a code, the modal transitions
-to the "in-room" stage. This stage has several UX issues:
-
-  2a. Scrollbar overflow
-      The `.custom-card` has `max-height: min(85vh, 760px); overflow-y: auto`
-      AND the invite list `.custom-invite-list` has its own `max-height: 220px;
-      overflow-y: auto`. This creates nested scrollbars (vertical AND
-      horizontal in some viewports), which is not ergonomic.
-
-      Steps:
-        - Redesign the modal layout so it fits within the viewport without
-          triggering the outer `.custom-card` scrollbar.
-        - The invite list's inner scroll is acceptable; the outer card scroll
-          should not appear under normal conditions.
-        - Consider a tighter vertical layout or splitting the invite section
-          into a separate step/screen if needed.
-
-  2b. Rename the "Start" button
-      The start button (home.page.html:500–505) shows "Start (fill with
-      matchmaking)" when fewer than 4 players are in the room. This label is
-      too long and unclear. Rename it to just "Start" in all cases.
-      The `[disabled]` condition (`customRoomPlayers.length < 1`) is correct
-      and should be kept.
-
-  2c. Remove or justify the "Leave" button
-      The "Leave" button (home.page.html:499) calls `cancelCustomGame()`.
-      There is already a close button (×) at the top of the modal
-      (home.page.html:357) that also closes the modal. Evaluate whether the
-      "Leave" button adds value or creates confusion — if it is redundant,
-      remove it.
-
-  2d. Improve the "Invite" button states with icons
-      The invite button (home.page.html:482–490) currently shows text only:
-        - `inviteState === 'idle'`    → "Invite"
-        - `inviteState === 'sending'` → "…"
-        - `inviteState === 'sent'`    → "Sent"
-        - `inviteState === 'error'`   → "Retry"
-
-      Replace with icon-based feedback:
-        - `sending` → show a spinning loader icon (spinner SVG or CSS
-          animation) instead of "…"
-        - `sent`    → show a green checkmark icon (✓) instead of "Sent"
-        - `error`   → show a red ✕ icon; optionally change to "Retry" on hover
-        - `idle`    → keep "Invite" label as-is
-
-
---------------------------------------------------------------------------------
-3. FEATURE: Real-time invite notification for invited players
---------------------------------------------------------------------------------
-
-Files:
-  - frontend/src/app/home/home.page.ts   (invitePlayer method, lines 505–528)
-  - frontend/src/app/home/home.page.html (invite section, lines 466–494)
-  - backend/src/session/custom-game-manager.ts
-
-Context:
-  When a room creator invites a player, the app currently sends a plain-text
-  message via `POST /api/messages` (home.page.ts:516) with this content:
-    "Hi! Would you be interested in joining my custom game on Mercury? Enter
-     the following code to join: ${this.customRoomCode}"
-  The invited player only sees this in their inbox — there is NO real-time
-  alert.
-
-Goal:
-  Invited players should receive an instant, visible notification and be able
-  to join the room in one click.
-
-Steps:
-  3a. Design an invite notification type
-      - Define a dedicated invite payload in `packages/shared/src/types.ts`
-        (e.g. `GameInviteMessage`) that carries: `fromUserName`, `roomCode`,
-        and optionally `fromUserPicture`.
-      - This should be distinct from the plain chat message type already in use.
-
-  3b. Send the invite via WebSocket (server push) instead of HTTP message
-      - On the backend, when the creator invites a user, the server should push
-        a `gameInvite` WebSocket event directly to the invited player's socket
-        (if they are online), in addition to or instead of the HTTP message.
-
-  3c. Show a toast/notification to the invited player
-      - On the frontend, listen for `gameInvite` WebSocket events in
-        `GameStateService` (or `home.page.ts`).
-      - When the event is received, show a non-blocking overlay notification
-        (e.g. bottom-right corner toast or small dialog) that:
-          • Displays who sent the invite (name + avatar).
-          • Has a "Join" button that, when clicked, calls `joinCustomRoomByCode()`
-            with the `roomCode` from the event payload — this should require
-            only 1 click.
-          • Has a "Decline" button (or auto-dismiss after ~15 s).
-      - No existing toast component exists in the codebase — a new one must be
-        created.
-
-  3d. Update invite button states accordingly
-      - `inviteState === 'sent'` now means the WebSocket event was sent, not
-        necessarily accepted. The checkmark icon (from task 2d) reflects
-        "invite dispatched", not "player accepted" — this is acceptable.
-      - If the player declines, update the sender's invite button to show a
-        red ✕ (requires a new WebSocket response event from the invited player).
-
-
---------------------------------------------------------------------------------
-4. CLEANUP: Remove redundant content in the "Key Rules" section of Game Rules
---------------------------------------------------------------------------------
-
-File: frontend/src/app/shared/game-rules-modal.component.html (lines 87–104)
-
-The "Key Rules" section currently lists three rules, but rules 1 and 3 overlap,
-and rules 2 and 3 both address Jack swap restrictions:
-
-  Current rules:
-    1. Safe start: A marble on its own start position blocks passage and
-       cannot be captured or swapped.
-    2. Start-square restriction: A marble that just entered (via A or K) must
-       move forward before it can move backward (4) or be swapped (Jack).
-    3. Jack restriction: Cannot swap with a marble on its start position or
-       already in a home lane.
-
-  Overlap:
-    - Rule 1 already states that a start-position marble cannot be swapped.
-    - Rule 3 repeats this (Jack cannot swap with a start-position marble) and
-      adds a second case (home lane).
-    - Rule 2 also mentions Jack swap being blocked for freshly entered marbles.
-
-Steps:
-  a) Merge rules 1 and 3 into a single "Start position protection" rule that
-     covers all cases: blocks passage, cannot be captured, cannot be swapped
-     (by any card, including Jack).
-  b) Update rule 2 ("Start-square restriction") to remove the Jack-swap
-     reference since it is now covered by the merged rule — keep only the
-     "must move forward before moving backward (4)" constraint.
-  c) Add, if not already implied, the case from rule 3 about the home lane:
-     "Jack cannot swap with a marble already in a home lane."
-  d) Ensure the final list has no duplicated restrictions across bullet points.
+**Acceptance criteria:**
+- Clicking "Create new room" immediately disables the button and shows a loading affordance (text change and/or spinner).
+- The loading affordance disappears as soon as the modal switches to the "in-room" stage, or when an error is shown.
+- A second click during the loading window is a no-op (no duplicate WS connections, no duplicate `createCustomRoom` messages sent).

@@ -373,9 +373,9 @@
 
         <!-- ── Stage 1: choose between Create or Join with code ── -->
         <ng-container *ngIf="customStage === 'choose'">
-          <button class="custom-create-btn" (click)="createCustomRoom()">
-            <span class="ab-marble ab-orange"></span>
-            <span>Create new room</span>
+          <button class="custom-create-btn" (click)="createCustomRoom()" [disabled]="customCreating">
+            <span class="ab-marble ab-orange" *ngIf="!customCreating"></span>
+            <span>{{ customCreating ? 'Creating…' : 'Create new room' }}</span>
           </button>
 
           <div class="custom-divider"><span>or join with a code</span></div>
@@ -392,8 +392,8 @@
               spellcheck="false"
               (input)="customJoinCode = customJoinCode.toUpperCase()"
             />
-            <button type="submit" class="custom-join-btn" [disabled]="customJoinCode.trim().length !== 6">
-              Join
+            <button type="submit" class="custom-join-btn" [disabled]="customJoinCode.trim().length !== 6 || customCreating">
+              {{ customCreating ? 'Joining…' : 'Join' }}
             </button>
           </form>
 

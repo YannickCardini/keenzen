@@ -107,6 +107,7 @@ export class HomePage implements OnInit, OnDestroy {
   customError = '';
   customCopied = false;
   customStarting = false;
+  customCreating = false;
 
   // Invite section
   inviteCandidates: InviteCandidate[] = [];
@@ -385,6 +386,7 @@ export class HomePage implements OnInit, OnDestroy {
     this.customError = '';
     this.customCopied = false;
     this.customStarting = false;
+    this.customCreating = false;
     this.inviteCandidates = [];
     this.inviteSearch = '';
     this.inviteLoading = false;
@@ -399,6 +401,7 @@ export class HomePage implements OnInit, OnDestroy {
       this.myCustomColor = status.myColor;
       this.iAmCreator = status.isCreator;
       this.customStage = 'in-room';
+      this.customCreating = false;
       this.customError = '';
       // Lazy-load invite list once we know we're the signed-in creator.
       if (status.isCreator && this.auth.user$.getValue() && this.inviteCandidates.length === 0) {
@@ -414,6 +417,7 @@ export class HomePage implements OnInit, OnDestroy {
     });
 
     this.customConnectionErrorSub = this.gameStateService.connectionError$.pipe(take(1)).subscribe(() => {
+      this.customCreating = false;
       this.cleanupCustomGame();
       this.gameStateService.disconnect();
       this.tabLock.releaseSession();
@@ -423,6 +427,7 @@ export class HomePage implements OnInit, OnDestroy {
     });
 
     this.customRejectedSub = this.gameStateService.actionRejected$.subscribe(reason => {
+      this.customCreating = false;
       this.customError = reason;
       // If we're still on the choose screen, the connection should be torn down
       // because the server already rejected us (e.g., room not found).
@@ -442,6 +447,8 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   async createCustomRoom(): Promise<void> {
+    if (this.customCreating) return;
+    this.customCreating = true;
     const user = this.auth.user$.getValue();
     const playerName = user?.name ?? generateGuestName();
     this.customError = '';
@@ -453,11 +460,13 @@ export class HomePage implements OnInit, OnDestroy {
   }
 
   async joinCustomRoomByCode(): Promise<void> {
+    if (this.customCreating) return;
     const code = this.customJoinCode.trim().toUpperCase();
     if (!/^[A-Z0-9]{6}$/.test(code)) {
       this.customError = 'Code must be 6 letters/digits.';
       return;
     }
+    this.customCreating = true;
     const user = this.auth.user$.getValue();
     const playerName = user?.name ?? generateGuestName();
     this.customError = '';
